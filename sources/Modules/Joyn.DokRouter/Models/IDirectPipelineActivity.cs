@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Joyn.DokRouter.Models
 {
-    //public interface IPipelineActivity
+    //public interface IDirectPipelineActivity
     //{
     //    public string Name { get; }
     //    public Guid Identifier { get; }

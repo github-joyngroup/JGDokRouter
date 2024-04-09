@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DokRouterTester", "Testers\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DokRouterServerTester", "Testers\DokRouterServerTester\DokRouterServerTester.csproj", "{31A56157-02F8-4EFB-98B8-4F4DA31F77B0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DokRouterClientTester", "Testers\DokRouterClientTester\DokRouterClientTester.csproj", "{2784E833-28A9-4AE2-876D-CFFF9DC27BB2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{31A56157-02F8-4EFB-98B8-4F4DA31F77B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{31A56157-02F8-4EFB-98B8-4F4DA31F77B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{31A56157-02F8-4EFB-98B8-4F4DA31F77B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2784E833-28A9-4AE2-876D-CFFF9DC27BB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2784E833-28A9-4AE2-876D-CFFF9DC27BB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2784E833-28A9-4AE2-876D-CFFF9DC27BB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2784E833-28A9-4AE2-876D-CFFF9DC27BB2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,6 +54,7 @@ Global
 		{9C628342-3D3D-465F-B0BE-19ABFD348AB6} = {61AE0BF5-68D0-4650-B653-632886305602}
 		{0A0CCA1A-8FF8-48E4-BE6F-D7070D6EBBA2} = {A73AEF6E-DEF6-463C-8CD1-660625FB5123}
 		{31A56157-02F8-4EFB-98B8-4F4DA31F77B0} = {A73AEF6E-DEF6-463C-8CD1-660625FB5123}
+		{2784E833-28A9-4AE2-876D-CFFF9DC27BB2} = {A73AEF6E-DEF6-463C-8CD1-660625FB5123}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A47E8118-77E3-44E0-AC47-FD0A66CC41FE}

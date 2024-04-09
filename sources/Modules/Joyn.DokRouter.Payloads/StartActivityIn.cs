@@ -1,6 +1,6 @@
 ﻿namespace Joyn.DokRouter.Payloads
 {
-    public class StartActivity
+    public class StartActivityIn
     {
         public PipelineInstanceKey PipelineInstanceKey { get; set; }
     }

@@ -1,12 +1,32 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Joyn.DokRouter;
+using Joyn.DokRouter.Payloads;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DokRouterServerTester.Controllers
 {
-    public class DokRouterController : Controller
+    [ApiController]
+    [Route("[controller]")]
+    public class DokRouterController : ControllerBase
     {
-        public IActionResult Index()
+        [HttpPost("StartPipeline")]
+        public IActionResult StartPipeline(StartPipeline startPipelinePayload)
         {
-            return View();
+            MainEngine.StartPipeline(startPipelinePayload);
+            return Ok();
+        }
+
+        [HttpPost("StartActivity")]
+        public IActionResult StartActivity(StartActivityIn startActivityPayload)
+        {
+            MainEngine.StartActivity(startActivityPayload);
+            return Ok();
+        }
+
+        [HttpPost("EndActivity")]
+        public IActionResult EndActivity(EndActivity endActivityPayload)
+        {
+            MainEngine.EndActivity(endActivityPayload);
+            return Ok();
         }
     }
 }

@@ -4,6 +4,6 @@
     {
         public Guid? PipelineDefinitionIdentifier { get; set; }
 
-        public object ExternalData { get; set; }
+        public string SerializedExternalData { get; set; }
     }
 }
