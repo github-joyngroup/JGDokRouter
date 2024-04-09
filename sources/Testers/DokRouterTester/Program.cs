@@ -67,10 +67,10 @@ do
         {
             Task.Run(() =>
             {
-                MainEngine.OnStartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
+                MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
                 {
                     PipelineDefinitionIdentifier = null,
-                    ExternalData = Guid.NewGuid()
+                    SerializedExternalData = Guid.NewGuid().ToString()
                 });
             });
         }
@@ -88,10 +88,10 @@ do
             }
         }
 
-        MainEngine.OnStartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
+        MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
         {
             PipelineDefinitionIdentifier = pipelineGuid != Guid.Empty ? pipelineGuid : (Guid?)null,
-            ExternalData = Guid.NewGuid()
+            SerializedExternalData = Guid.NewGuid().ToString()
         });
 
         Console.WriteLine($"Started pipeline...");
@@ -196,6 +196,6 @@ static class HelperEventTriggering
 
     public static void OnEndActivity(EndActivity endActivityPayload)
     {
-        Task.Run(() => MainEngine.OnEndActivity(endActivityPayload));
+        Task.Run(() => MainEngine.EndActivity(endActivityPayload));
     }
 }

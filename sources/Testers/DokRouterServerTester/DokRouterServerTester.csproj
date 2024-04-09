@@ -7,7 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DocDigitizer.Common.WAPI" Version="1.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+    <PackageReference Include="NetEscapades.Extensions.Logging.RollingFile" Version="2.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Modules\Joyn.DokRouter.Payloads\Joyn.DokRouter.Payloads.csproj" />
+    <ProjectReference Include="..\..\Modules\Joyn.DokRouter\Joyn.DokRouter.csproj" />
   </ItemGroup>
 
 </Project>

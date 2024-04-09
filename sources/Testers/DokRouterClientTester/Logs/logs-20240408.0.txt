@@ -1,0 +1,12 @@
+2024-04-08 18:04:52.530 +01:00 [Information] MainDokRouterClientTester: DDLogger started up
+2024-04-08 18:04:53.804 +01:00 [Information] Microsoft.Hosting.Lifetime: Now listening on: https://localhost:7021
+2024-04-08 18:04:53.806 +01:00 [Information] Microsoft.Hosting.Lifetime: Now listening on: http://localhost:5059
+2024-04-08 18:04:53.807 +01:00 [Information] Microsoft.Hosting.Lifetime: Application started. Press Ctrl+C to shut down.
+2024-04-08 18:04:53.807 +01:00 [Information] Microsoft.Hosting.Lifetime: Hosting environment: Development
+2024-04-08 18:04:53.807 +01:00 [Information] Microsoft.Hosting.Lifetime: Content root path: C:\Projects\Joyn\JGDokRouter\sources\Testers\DokRouterClientTester\
+2024-04-08 18:25:31.880 +01:00 [Information] MainDokRouterClientTester: DDLogger started up
+2024-04-08 18:25:32.567 +01:00 [Information] Microsoft.Hosting.Lifetime: Now listening on: https://localhost:7021
+2024-04-08 18:25:32.569 +01:00 [Information] Microsoft.Hosting.Lifetime: Now listening on: http://localhost:5059
+2024-04-08 18:25:32.569 +01:00 [Information] Microsoft.Hosting.Lifetime: Application started. Press Ctrl+C to shut down.
+2024-04-08 18:25:32.569 +01:00 [Information] Microsoft.Hosting.Lifetime: Hosting environment: Development
+2024-04-08 18:25:32.569 +01:00 [Information] Microsoft.Hosting.Lifetime: Content root path: C:\Projects\Joyn\JGDokRouter\sources\Testers\DokRouterClientTester\

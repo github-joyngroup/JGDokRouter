@@ -10,8 +10,10 @@ namespace Joyn.DokRouter
     {
         private static readonly object dokRouterEngineConfigurationLocker = new object();
 
-        internal static DokRouterEngineConfiguration DokRouterEngineConfiguration { get; private set; }
-        internal static Dictionary<Guid, PipelineDefinition> PipelineDefinitions { get; private set; } = new Dictionary<Guid, PipelineDefinition>();
+        private static DokRouterEngineConfiguration DokRouterEngineConfiguration { get; set; }
+        private static Dictionary<Guid, PipelineDefinition> PipelineDefinitions { get; set; } = new Dictionary<Guid, PipelineDefinition>();
+
+        private static OnStartActivityHandler OnStartActivity;
 
         public static void Startup(DokRouterEngineConfiguration configuration)
         {
@@ -19,12 +21,30 @@ namespace Joyn.DokRouter
             {
                 DokRouterEngineConfiguration = configuration;
 
+                var onExecuteAssembly = Assembly.Load(configuration.OnStartActivityAssembly);
+                if (onExecuteAssembly == null) { throw new Exception($"OnStartActivityAssembly assembly '{configuration.OnStartActivityAssembly}' not found"); }
+                var OnExecuteClass = onExecuteAssembly.GetType(configuration.OnStartActivityClass);
+                if (OnExecuteClass == null) { throw new Exception($"OnStartActivityClass type '{configuration.OnStartActivityClass}' in assembly '{configuration.OnStartActivityAssembly}' not found"); }
+                var onMessageMethod = OnExecuteClass.GetMethod(configuration.OnStartActivityMethod);
+                if (onMessageMethod == null) { throw new Exception($"OnStartActivityMethod method '{configuration.OnStartActivityMethod}' in class '{configuration.OnStartActivityClass}' not found"); }
+
+                try
+                {
+                    OnStartActivity = (OnStartActivityHandler)Delegate.CreateDelegate(typeof(OnStartActivityHandler), onMessageMethod);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Unable to load Main OnStartActivityHandler configured with method '{configuration.OnStartActivityMethod}' in class '{configuration.OnStartActivityClass}'", ex);
+                }
+
                 foreach (var pipelineConfiguration in configuration.Pipelines)
                 {
                     PipelineDefinitions.Add(pipelineConfiguration.Identifier, BuildPipelineFromConfiguration(pipelineConfiguration));
                 }
 
                 //TODO: Log loaded pipeline definitions - what is loaded and with what configurations
+
+                //TODO: Launch TEST pipeline for each pipeline definition
 
                 //TODO: Load from DB running instances
             }
@@ -36,32 +56,77 @@ namespace Joyn.DokRouter
             {
                 Name = pipelineConfiguration.Name,
                 Identifier = pipelineConfiguration.Identifier,
-                Activities = pipelineConfiguration.Activities.Select(a => BuildActivityFromConfiguration(a)).OrderBy(a => a.OrderNumber).ToList()
+                Activities = pipelineConfiguration.Activities.FindAll(a => !a.Disabled).Select(a => BuildActivityFromConfiguration(a)).OrderBy(a => a.OrderNumber).ToList()
             };
         }
 
         private static PipelineActivityDefinition BuildActivityFromConfiguration(EDDokRouterEngineConfiguration_Activities activityConfiguration)
         {
-            var onExecuteAssembly = Assembly.Load(activityConfiguration.OnStartActivityAssembly);
-            if (onExecuteAssembly == null) { throw new Exception($"OnStartActivityAssembly assembly '{activityConfiguration.OnStartActivityAssembly}' not found"); }
-            var OnExecuteClass = onExecuteAssembly.GetType(activityConfiguration.OnStartActivityClass);
-            if (OnExecuteClass == null) { throw new Exception($"OnStartActivityClass type '{activityConfiguration.OnStartActivityClass}' in assembly '{activityConfiguration.OnStartActivityAssembly}' not found"); }
-            var onMessageMethod = OnExecuteClass.GetMethod(activityConfiguration.OnStartActivityMethod);
-            if (onMessageMethod == null) { throw new Exception($"OnStartActivityMethod method '{activityConfiguration.OnStartActivityMethod}' in class '{activityConfiguration.OnStartActivityClass}' not found"); }
+            ActivityExecutionDefinition executionDefinition = new ActivityExecutionDefinition();
+            
+            try
+            {
+                executionDefinition.Kind = activityConfiguration.Kind;
+                switch(executionDefinition.Kind)
+                {
+                    case ActivityKind.Direct:
+                        var onExecuteAssembly = Assembly.Load(activityConfiguration.DirectActivityAssembly);
+                        if (onExecuteAssembly == null) { throw new Exception($"DirectActivityAssembly assembly '{activityConfiguration.DirectActivityAssembly}' not found"); }
+                        var OnExecuteClass = onExecuteAssembly.GetType(activityConfiguration.DirectActivityClass);
+                        if (OnExecuteClass == null) { throw new Exception($"DirectActivityClass type '{activityConfiguration.DirectActivityClass}' in assembly '{activityConfiguration.DirectActivityAssembly}' not found"); }
+                        var onMessageMethod = OnExecuteClass.GetMethod(activityConfiguration.DirectActivityMethod);
+                        if (onMessageMethod == null) { throw new Exception($"DirectActivityMethod method '{activityConfiguration.DirectActivityMethod}' in class '{activityConfiguration.DirectActivityClass}' not found"); }
 
-            OnStartActivityHandler onStartActivity = (OnStartActivityHandler) Delegate.CreateDelegate(typeof(OnStartActivityHandler), onMessageMethod);
+                        try
+                        {
+                            executionDefinition.DirectActivityHandler = (OnExecuteActivityHandler)Delegate.CreateDelegate(typeof(OnExecuteActivityHandler), onMessageMethod);
+                        }
+                        catch(Exception ex)
+                        {
+                            throw new Exception($"Unable to load DirectActivityHandler configured with method '{activityConfiguration.DirectActivityMethod}' in class '{activityConfiguration.DirectActivityClass}'", ex);
+                        }
+
+                        break;
+
+                    case ActivityKind.HTTP:
+                        executionDefinition.Url = activityConfiguration.Url;
+                        if (String.IsNullOrWhiteSpace(executionDefinition.Url))
+                        {
+                            throw new Exception("Activity is configured as HTTP but no Url is defined");
+                        }
+                        break;
+
+                    case ActivityKind.KafkaEvent:
+                        executionDefinition.KafkaTopic = activityConfiguration.KafkaTopic;
+                        if (String.IsNullOrWhiteSpace(executionDefinition.KafkaTopic))
+                        {
+                            throw new Exception("Activity is configured as KafkaEvent but no KafkaTopic is defined");
+                        }
+                        break;
+
+                    default:
+                        throw new NotImplementedException("Activity kind is unknown or not implemented");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error loading activity {activityConfiguration.Name} from configuration", ex);
+            }
 
             return new PipelineActivityDefinition()
             {
                 Name = activityConfiguration.Name,
                 Identifier = activityConfiguration.Identifier,
                 OrderNumber = activityConfiguration.OrderNumber,
-                OnStartActivity = onStartActivity
+
+                ExecutionDefinition = executionDefinition
             };
+            
+            
         }
 
 
-        public static void OnStartPipeline(Joyn.DokRouter.Payloads.StartPipeline startPipelinePayload)
+        public static void StartPipeline(Joyn.DokRouter.Payloads.StartPipeline startPipelinePayload)
         {
             //Get pipeline to start with fallback to default pipeline
             var pipelineDefinitionIdToStart = startPipelinePayload?.PipelineDefinitionIdentifier ?? DokRouterEngineConfiguration.DefaultPipelineIdentifier;
@@ -74,7 +139,7 @@ namespace Joyn.DokRouter
 
             if (PipelineDefinitions.TryGetValue(pipelineDefinitionIdToStart.Value, out var pipelineDefinition))
             {
-                StartPipeline(pipelineDefinition, startPipelinePayload);
+                InnerStartPipeline(pipelineDefinition, startPipelinePayload);
             }
             else
             {
@@ -85,7 +150,7 @@ namespace Joyn.DokRouter
 
         private static ConcurrentDictionary<PipelineInstanceKey, PipelineInstance> RunningInstances = new ConcurrentDictionary<PipelineInstanceKey, PipelineInstance>();
 
-        private static void StartPipeline(PipelineDefinition pipelineDefinition, StartPipeline startPipelinePayload)
+        private static void InnerStartPipeline(PipelineDefinition pipelineDefinition, StartPipeline startPipelinePayload)
         {
             //Create new instance
             var pipelineInstance = new PipelineInstance()
@@ -97,7 +162,7 @@ namespace Joyn.DokRouter
                 },
                 CurrentActivityIndex = 0,
                 StartedAt = DateTime.UtcNow,
-                ExternalData = startPipelinePayload.ExternalData,
+                SerializedExternalData = startPipelinePayload.SerializedExternalData,
 
                 ActivityExecutions = new Dictionary<int, Dictionary<ActivityExecutionKey, ActivityExecution>>()
             };
@@ -105,19 +170,19 @@ namespace Joyn.DokRouter
             //Add to running instances
             RunningInstances.TryAdd(pipelineInstance.Key, pipelineInstance);
 
-            //TO DO: PERSIST TO DB
+            //TODO: PERSIST TO DB
 
             DDLogger.LogInfo<MainEngine>($"Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) started new instance with identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
             //Trigger start of first activity
-            OnStartActivity(new Joyn.DokRouter.Payloads.StartActivity()
+            StartActivity(new Joyn.DokRouter.Payloads.StartActivityIn()
             {
                 PipelineInstanceKey = pipelineInstance.Key
             });
         }
 
         
-        public static void OnStartActivity(Joyn.DokRouter.Payloads.StartActivity startActivityPayload)
+        public static void StartActivity(Joyn.DokRouter.Payloads.StartActivityIn startActivityPayload)
         {
             if(!PipelineDefinitions.TryGetValue(startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
             {
@@ -154,12 +219,19 @@ namespace Joyn.DokRouter
                 StartedAt = DateTime.UtcNow
             });
 
-            activityDefinition.OnStartActivity(activityExecutionKey, pipelineInstance.ExternalData);
+            Task.Run(() =>
+            {
+                OnStartActivity(activityDefinition.ExecutionDefinition, new StartActivityOut()
+                {
+                    ActivityExecutionKey = activityExecutionKey,
+                    SerializedExternalData = pipelineInstance.SerializedExternalData
+                });
+            });
 
-            //TO DO: PERSIST TO DB
+            //TODO: PERSIST TO DB
         }
 
-        public static void OnEndActivity(Joyn.DokRouter.Payloads.EndActivity endActivityPayload)
+        public static void EndActivity(Joyn.DokRouter.Payloads.EndActivity endActivityPayload)
         {
             if (!PipelineDefinitions.TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
             {
@@ -183,13 +255,13 @@ namespace Joyn.DokRouter
             //Move to next activity
             pipelineInstance.CurrentActivityIndex++;
 
-            //TO DO: PERSIST TO DB - Finished activity
+            //TODO: PERSIST TO DB - Finished activity
 
             //Check if there are activities available
             if (pipelineInstance.CurrentActivityIndex < pipelineDefinition.Activities.Count)
             {
                 var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
-                OnStartActivity(new Joyn.DokRouter.Payloads.StartActivity()
+                StartActivity(new Joyn.DokRouter.Payloads.StartActivityIn()
                 {
                     PipelineInstanceKey = endActivityPayload.ActivityExecutionKey.PipelineInstanceKey
                 });
@@ -202,7 +274,7 @@ namespace Joyn.DokRouter
                 //Remove from running instances
                 RunningInstances.TryRemove(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out _);
 
-                //TO DO: PERSIST TO DB - Finished pipeline
+                //TODO: PERSIST TO DB - Finished pipeline
             }
         }
 
