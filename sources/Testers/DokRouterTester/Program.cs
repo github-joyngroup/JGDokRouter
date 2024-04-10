@@ -70,7 +70,7 @@ do
                 MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
                 {
                     PipelineDefinitionIdentifier = null,
-                    SerializedExternalData = Guid.NewGuid().ToString()
+                    //MarshalledExternalData = Guid.NewGuid().ToString()
                 });
             });
         }
@@ -91,7 +91,7 @@ do
         MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
         {
             PipelineDefinitionIdentifier = pipelineGuid != Guid.Empty ? pipelineGuid : (Guid?)null,
-            SerializedExternalData = Guid.NewGuid().ToString()
+            //MarshalledExternalData = Guid.NewGuid().ToString()
         });
 
         Console.WriteLine($"Started pipeline...");

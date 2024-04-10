@@ -29,13 +29,11 @@ builder.Services.AddSingleton<DokRouterEngineConfiguration>((options =>
     return dokRouterEngineConfiguration;
 }));
 
-
 //Filters
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add<LogExceptionAttribute>();
 });
-
 
 var app = builder.Build();
 
@@ -44,7 +42,7 @@ DDLogger.Startup(logger);
 
 try
 {
-    Joyn.DokRouter.MainEngine.Startup(app.Services.GetRequiredService<DokRouterEngineConfiguration>());
+    Joyn.DokRouter.MainEngine.Startup(app.Services.GetRequiredService<DokRouterEngineConfiguration>());    
 }
 catch (Exception ex)
 {

@@ -2,7 +2,6 @@
 using Joyn.DokRouter;
 using Joyn.DokRouter.Models;
 using Joyn.DokRouter.Payloads;
-using Newtonsoft.Json;
 using System.Text;
 
 namespace DokRouterServerTester.HelperWorkers
@@ -15,10 +14,9 @@ namespace DokRouterServerTester.HelperWorkers
         public static async void OnStartActivity(ActivityExecutionDefinition activityExecutionDefinition, StartActivityOut startActivityOutPayload)
         {
             //Fill Callback Url
-            startActivityOutPayload.CallbackUrl = "https://localhost:7285/DokRouter/EndActivity"; //TEST ONLY CANNOT BE HARDCODED HERE
+            //TODO: MOVE TO CONFIGURATION
+            startActivityOutPayload.CallbackUrl = "https://localhost:7285/DokRouter/EndActivity";
             
-            
-            "0".ToString();
             switch(activityExecutionDefinition.Kind)
             {
                 case ActivityKind.Direct:
@@ -26,7 +24,7 @@ namespace DokRouterServerTester.HelperWorkers
                     break;
 
                 case ActivityKind.HTTP:
-                    var jsonContent = JsonConvert.SerializeObject(startActivityOutPayload);
+                    var jsonContent = System.Text.Json.JsonSerializer.Serialize(startActivityOutPayload);
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
                     var response = await HttpClient.PostAsync(activityExecutionDefinition.Url, content);
                     var responseContent = await response.Content.ReadAsStringAsync();
@@ -49,7 +47,7 @@ namespace DokRouterServerTester.HelperWorkers
                 ActivityExecutionKey = startActivityPayload.ActivityExecutionKey,
                 IsSuccess = true
             };
-            var jsonContent = JsonConvert.SerializeObject(endActivityPayload);
+            var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
             //Callback after finishing

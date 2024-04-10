@@ -162,7 +162,7 @@ namespace Joyn.DokRouter
                 },
                 CurrentActivityIndex = 0,
                 StartedAt = DateTime.UtcNow,
-                SerializedExternalData = startPipelinePayload.SerializedExternalData,
+                MarshalledExternalData = startPipelinePayload.MarshalledExternalData,
 
                 ActivityExecutions = new Dictionary<int, Dictionary<ActivityExecutionKey, ActivityExecution>>()
             };
@@ -184,11 +184,11 @@ namespace Joyn.DokRouter
         
         public static void StartActivity(Joyn.DokRouter.Payloads.StartActivityIn startActivityPayload)
         {
-            if(!PipelineDefinitions.TryGetValue(startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
+            if (!PipelineDefinitions.TryGetValue(startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
             {
                 DDLogger.LogError<MainEngine>($"No pipeline definition found for identifier: {startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier}");
                 return;
-            }
+            }            
 
             if (!RunningInstances.TryGetValue(startActivityPayload.PipelineInstanceKey, out var pipelineInstance))
             {
@@ -203,6 +203,7 @@ namespace Joyn.DokRouter
             }
 
             var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
+            DDLogger.LogDebug<MainEngine>($"Starting activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
             if (!pipelineInstance.ActivityExecutions.ContainsKey(pipelineInstance.CurrentActivityIndex)) { pipelineInstance.ActivityExecutions.Add(pipelineInstance.CurrentActivityIndex, new Dictionary<ActivityExecutionKey, ActivityExecution>()); }
 
@@ -224,9 +225,11 @@ namespace Joyn.DokRouter
                 OnStartActivity(activityDefinition.ExecutionDefinition, new StartActivityOut()
                 {
                     ActivityExecutionKey = activityExecutionKey,
-                    SerializedExternalData = pipelineInstance.SerializedExternalData
+                    MarshalledExternalData = pipelineInstance.MarshalledExternalData
                 });
             });
+
+            DDLogger.LogInfo<MainEngine>($"Started activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
             //TODO: PERSIST TO DB
         }
@@ -244,23 +247,30 @@ namespace Joyn.DokRouter
                 DDLogger.LogError<MainEngine>($"Cannot find running instance: {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineInstanceIdentifier} for pipeline definition: {pipelineDefinition} ({pipelineDefinition.Identifier})");
                 return;
             }
+            
+            //Used for logging and for detecting next activity
+            var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
 
-            if(pipelineInstance.ActivityExecutions.ContainsKey(pipelineInstance.CurrentActivityIndex) && pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex].ContainsKey(endActivityPayload.ActivityExecutionKey))
+            if (pipelineInstance.ActivityExecutions.ContainsKey(pipelineInstance.CurrentActivityIndex) && pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex].ContainsKey(endActivityPayload.ActivityExecutionKey))
             {
                 pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][endActivityPayload.ActivityExecutionKey].EndedAt = DateTime.UtcNow;
                 pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][endActivityPayload.ActivityExecutionKey].IsSuccess = endActivityPayload.IsSuccess;
                 pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][endActivityPayload.ActivityExecutionKey].ErrorMessage = endActivityPayload.ErrorMessage;
             }
 
+            //Update model
+            pipelineInstance.MarshalledExternalData = endActivityPayload.MarshalledExternalData;
+
             //Move to next activity
             pipelineInstance.CurrentActivityIndex++;
 
             //TODO: PERSIST TO DB - Finished activity
 
+            DDLogger.LogInfo<MainEngine>($"Ended activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+
             //Check if there are activities available
             if (pipelineInstance.CurrentActivityIndex < pipelineDefinition.Activities.Count)
             {
-                var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
                 StartActivity(new Joyn.DokRouter.Payloads.StartActivityIn()
                 {
                     PipelineInstanceKey = endActivityPayload.ActivityExecutionKey.PipelineInstanceKey

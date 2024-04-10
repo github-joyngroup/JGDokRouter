@@ -14,7 +14,7 @@ namespace Joyn.DokRouter.Models
         public int CurrentActivityIndex { get; set; }
         public DateTime StartedAt { get; set; }
 
-        public string SerializedExternalData { get; set; }
+        public byte[] MarshalledExternalData { get; set; }
 
         public Dictionary<int, Dictionary<ActivityExecutionKey, ActivityExecution>> ActivityExecutions { get; set; }
     }

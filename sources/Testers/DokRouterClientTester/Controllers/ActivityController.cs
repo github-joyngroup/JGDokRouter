@@ -1,6 +1,5 @@
 ﻿using Joyn.DokRouter.Payloads;
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
 using System.Text;
 
 namespace DokRouterClientTester.Controllers
@@ -30,7 +29,7 @@ namespace DokRouterClientTester.Controllers
                     ActivityExecutionKey = startActivityPayload.ActivityExecutionKey,
                     IsSuccess = true
                 };
-                var jsonContent = JsonConvert.SerializeObject(endActivityPayload);
+                var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
                 //Callback after finishing

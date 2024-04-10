@@ -4,6 +4,6 @@
     {
         public Guid? PipelineDefinitionIdentifier { get; set; }
 
-        public string SerializedExternalData { get; set; }
+        public byte[] MarshalledExternalData { get; set; }
     }
 }

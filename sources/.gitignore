@@ -93,3 +93,7 @@ env_configs
 
 **/linux-release/
 **/windows-release/
+
+#DocDigitizer PI
+Testers/DokRouterClientTester
+Testers/DokRouterServerTester
