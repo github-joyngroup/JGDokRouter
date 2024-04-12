@@ -1,6 +1,6 @@
 ﻿using ProtoBuf;
 
-namespace Joyn.DokRouter.Payloads
+namespace Joyn.DokRouter.Common
 {
     public static class ProtoBufSerializer
     {

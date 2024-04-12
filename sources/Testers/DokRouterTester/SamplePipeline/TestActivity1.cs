@@ -1,6 +1,6 @@
 ﻿using DocDigitizer.Common.Logging;
-using Joyn.DokRouter.Models;
-using Joyn.DokRouter.Payloads;
+using Joyn.DokRouter.Common.Models;
+using Joyn.DokRouter.Common.Payloads;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +21,7 @@ namespace DokRouterTester.SamplePipeline
             DDLogger.LogInfo<TestActivity1>($"TestActivity1.Finish Execute: DocumentUuid: {documentUuid}");
 
             //Trigger End Activity
-            HelperEventTriggering.OnEndActivity(new Joyn.DokRouter.Payloads.EndActivity()
+            HelperEventTriggering.OnEndActivity(new EndActivity()
             {
                 ActivityExecutionKey = activityExecutionKey,
                 IsSuccess = true

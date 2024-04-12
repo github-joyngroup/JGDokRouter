@@ -5,8 +5,12 @@ using System.Configuration;
 using Microsoft.Extensions.Configuration;
 using DocDigitizer.Common.Logging;
 using Joyn.DokRouter;
-using Joyn.DokRouter.Payloads;
+using Joyn.DokRouter.Common.Payloads;
 using DokRouterTester.SamplePipeline;
+using Joyn.DokRouter.Common.Models;
+using Joyn.DokRouter.Common.Payloads;
+using Joyn.DokRouter.Common.DAL;
+using Joyn.DokRouter.DAL;
 
 var builder = Host.CreateDefaultBuilder(args);
 
@@ -40,7 +44,7 @@ var logger = host.Services.GetRequiredService<ILogger<MainTestAPI>>();
 DDLogger.Startup(logger);
 try
 {
-    Joyn.DokRouter.MainEngine.Startup(host.Services.GetRequiredService<DokRouterEngineConfiguration>());
+    Joyn.DokRouter.MainEngine.Startup(new MockDokRouterDAL());
 }
 catch (Exception ex)
 {
@@ -67,7 +71,7 @@ do
         {
             Task.Run(() =>
             {
-                MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
+                MainEngine.StartPipeline(new StartPipeline()
                 {
                     PipelineDefinitionIdentifier = null,
                     //MarshalledExternalData = Guid.NewGuid().ToString()
@@ -88,7 +92,7 @@ do
             }
         }
 
-        MainEngine.StartPipeline(new Joyn.DokRouter.Payloads.StartPipeline()
+        MainEngine.StartPipeline(new StartPipeline()
         {
             PipelineDefinitionIdentifier = pipelineGuid != Guid.Empty ? pipelineGuid : (Guid?)null,
             //MarshalledExternalData = Guid.NewGuid().ToString()
@@ -142,36 +146,37 @@ static class HelperViewer
     {
         Task.Run(() =>
         {
-            stateOn = true;
-            while (stateOn)
-            {
-                var stateData = MainEngine.GetState();
-                Console.Clear();
-                Console.WriteLine("Running Instances:");
-                foreach (var item in stateData)
-                {
-                    Console.WriteLine($"Pipeline: {item.PipelineDefinitionIdentifier} - has {item.PipelineInstances.Count} Running instances");
-                    foreach (var instance in item.PipelineInstances)
-                    {
-                        Console.WriteLine($" Definition: {instance.Key.PipelineDefinitionIdentifier} - Instance: {instance.Key.PipelineInstanceIdentifier} - StartedAt: {instance.StartedAt} - CurrentActivityIndex: {instance.CurrentActivityIndex}");
-                        foreach (var activityIndex in instance.ActivityExecutions.Keys.OrderBy(k => k))
-                        {
-                            var executions = instance.ActivityExecutions[activityIndex];
-                            foreach (var execution in executions)
-                            {
-                                Console.WriteLine($"    Activity Execution [{activityIndex}]: Definition: {execution.Key.ActivityDefinitionIdentifier} - Execution: {execution.Key.ActivityExecutionIdentifier} - StartedAt: {execution.Value.StartedAt} - EndedAt: {execution.Value.EndedAt} - IsSuccess: {execution.Value.IsSuccess}");
-                            }
-                        }
-                    }
-                }
+            //Discontinued
+            //stateOn = true;
+            //while (stateOn)
+            //{
+            //    var stateData = MainEngine.GetState();
+            //    Console.Clear();
+            //    Console.WriteLine("Running Instances:");
+            //    foreach (var item in stateData)
+            //    {
+            //        Console.WriteLine($"Pipeline: {item.PipelineDefinitionIdentifier} - has {item.PipelineInstances.Count} Running instances");
+            //        foreach (var instance in item.PipelineInstances)
+            //        {
+            //            Console.WriteLine($" Definition: {instance.Key.PipelineDefinitionIdentifier} - Instance: {instance.Key.PipelineInstanceIdentifier} - StartedAt: {instance.StartedAt} - CurrentActivityIndex: {instance.CurrentActivityIndex}");
+            //            foreach (var activityIndex in instance.ActivityExecutions.Keys.OrderBy(k => k))
+            //            {
+            //                var executions = instance.ActivityExecutions[activityIndex];
+            //                foreach (var execution in executions)
+            //                {
+            //                    Console.WriteLine($"    Activity Execution [{activityIndex}]: Definition: {execution.Value.Key.ActivityDefinitionIdentifier} - Execution: {execution.Value.Key.ActivityExecutionIdentifier} - StartedAt: {execution.Value.StartedAt} - EndedAt: {execution.Value.EndedAt} - IsSuccess: {execution.Value.IsSuccess}");
+            //                }
+            //            }
+            //        }
+            //    }
 
-                Console.WriteLine(); 
-                Console.WriteLine("".PadLeft(50, '-'));
-                Console.WriteLine("stopstate - to stop viewer");
-                Console.WriteLine();
+            //    Console.WriteLine(); 
+            //    Console.WriteLine("".PadLeft(50, '-'));
+            //    Console.WriteLine("stopstate - to stop viewer");
+            //    Console.WriteLine();
 
-                Thread.Sleep(1500);
-            }
+            //    Thread.Sleep(1500);
+            //}
         });
     }
 
