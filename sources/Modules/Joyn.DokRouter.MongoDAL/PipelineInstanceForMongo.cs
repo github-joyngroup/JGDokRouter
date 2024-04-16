@@ -1,4 +1,4 @@
-﻿using DocDigitizer.Common.DAL.KeyValue;
+﻿using DocDigitizer.Common.DAL.SimpleMongo;
 using Joyn.DokRouter.Common.Models;
 using System;
 using System.Collections.Generic;
@@ -31,7 +31,7 @@ namespace Joyn.DokRouter.MongoDAL
         public PipelineInstanceForMongo(PipelineInstance pipelineInstance) 
         {
             _pipelineInstance = pipelineInstance;
-            Id = pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N");    
+            Id = pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N");
         }
 
         

@@ -36,7 +36,7 @@ namespace Joyn.DokRouter
         /// <summary>
         /// Dictionary of start activity handlers, indexed by the hash of their configuration
         /// </summary>
-        private static Dictionary<string, OnStartActivityHandler> OnStartActivityHandlers;
+        private static Dictionary<string, OnStartActivityHandler> OnStartActivityHandlers = new Dictionary<string, OnStartActivityHandler>();
 
         /// <summary>
         /// Persistence Layer Implementation
@@ -68,13 +68,39 @@ namespace Joyn.DokRouter
                 var existingLatestConfiguration = DokRouterDAL.GetEngineConfigurationByHash(latestEngineConfiguration.Hash);
                 if(existingLatestConfiguration == null)
                 {
+                    DDLogger.LogInfo<MainEngine>($"Detected new configuration with Hash: {latestEngineConfiguration.Hash}, persisting so it can be reused if needed");
                     DokRouterDAL.SaveOrUpdateEngineConfiguration(latestEngineConfiguration);
                 }
 
                 LatestConfigurationHash = latestEngineConfiguration.Hash;
+                DDLogger.LogInfo<MainEngine>($"Loaded latest configuration with Hash: {LatestConfigurationHash}");
 
-                //Load Runninng instances from DB 
-                RunningInstances = new ConcurrentDictionary<PipelineInstanceKey, PipelineInstance>(DokRouterDAL.GetAllRunningInstances().ToDictionary(rI => rI.Key, rI => rI));
+                //Load Running instances from DB 
+                //As, by design, we cannot obtain all data on a single call, we will iterate through the pages until we get all data
+                //However, this may cause a problem if we have many running instances, as we will be loading all of them in memory
+                //Should a limit be imposed? And we would only load up to a limit? If so, we also need to change the finished pipeline method to allow loading remaining pipelines up to that same limit
+
+                var firstPageResult = DokRouterDAL.GetRunningInstances(1);
+
+                var allPagesTasks = Enumerable.Range(2, firstPageResult.lastPage).Select(pageNumber =>
+                {
+                    return Task.Run(() =>
+                    {
+                        return DokRouterDAL.GetRunningInstances(pageNumber);
+                    });
+                }).ToArray();
+
+                Task.WaitAll(allPagesTasks);
+                List<PipelineInstance> baseRunningInstances = new List<PipelineInstance>();
+                baseRunningInstances.AddRange(firstPageResult.result);
+                baseRunningInstances.AddRange(allPagesTasks.SelectMany(t => t.Result.result));
+
+                if (baseRunningInstances.Any())
+                {
+                    DDLogger.LogInfo<MainEngine>($"Found {baseRunningInstances.Count} pipeline instances running, loading required configurations...");
+                }
+
+                RunningInstances = new ConcurrentDictionary<PipelineInstanceKey, PipelineInstance>(baseRunningInstances.ToDictionary(rI => rI.Key, rI => rI));
 
                 List<PipelineInstanceKey> erroredPipelines = new List<PipelineInstanceKey>();                
                 //Check if there are any running instances in previous configuration versions, if so, those configurations must be loaded
@@ -86,17 +112,23 @@ namespace Joyn.DokRouter
                         if (configuration == null)
                         {
                             DDLogger.LogError<MainEngine>($"Pipeline Instance '{runningInstanceKey.PipelineInstanceIdentifier}' has a configuration with hash {runningInstanceKey.ConfigurationHash} that was not found - pipeline instance will be errored");
+                            erroredPipelines.Add(runningInstanceKey);
+                            continue;
                         }
-
+                        
                         requiredConfigurations[runningInstanceKey.ConfigurationHash] = configuration;
                     }
                 }
 
-                //TODO: Move errored pipeline instances to the errored state and collection
-                foreach(var erroredPipeline in erroredPipelines) { RunningInstances.TryRemove(erroredPipeline, out _); }
+                foreach(var erroredPipeline in erroredPipelines) 
+                {
+                    ErrorPipeline(RunningInstances[erroredPipeline], "Associated configuration not found");
+                }
 
                 foreach (var configuration in requiredConfigurations.Values)
                 {
+                    PipelineDefinitions[configuration.Hash] = new Dictionary<Guid, PipelineDefinition>();
+
                     var onExecuteAssembly = Assembly.Load(configuration.OnStartActivityAssembly);
                     if (onExecuteAssembly == null) { throw new Exception($"OnStartActivityAssembly assembly '{configuration.OnStartActivityAssembly}' not found"); }
                     var OnExecuteClass = onExecuteAssembly.GetType(configuration.OnStartActivityClass);
@@ -119,22 +151,51 @@ namespace Joyn.DokRouter
                     }
                 }
 
-                //TODO: Log loaded pipeline definitions - what is loaded and with what configurations
+                //Log loaded pipeline definitions - what is loaded and with what configurations
+                DDLogger.LogInfo<MainEngine>($"DokRouter engine will start with {PipelineDefinitions.Count} Configurations");
+                foreach (var configurationHash in PipelineDefinitions.Keys)
+                {
+                    DDLogger.LogInfo<MainEngine>($"Configuration {configurationHash} has {PipelineDefinitions[configurationHash].Count} pipelines");
+
+                    foreach (var pipelineDefinitionKey in PipelineDefinitions[configurationHash].Keys)
+                    {
+                        var pipelineDefinition = PipelineDefinitions[configurationHash][pipelineDefinitionKey];
+                        DDLogger.LogInfo<MainEngine>($" - {pipelineDefinition.Name}: {pipelineDefinition.Identifier} with {pipelineDefinition.Activities.Count} activities");
+                        
+                        foreach(var activityDefinition in pipelineDefinition.Activities)
+                        {
+                            DDLogger.LogInfo<MainEngine>($"   - {activityDefinition.Name}: {activityDefinition.Identifier} with execution kind {activityDefinition.ExecutionDefinition.Kind}");
+                        }
+                    }
+                }
 
                 //TODO: Launch TEST pipeline for each pipeline definition
 
-                //TODO: Log loaded running instances - what is loaded and with what configurations
-
-                Parallel.ForEach(RunningInstances, runningInstance =>
+                //Log loaded running instances - what was loaded and with what configurations
+                if (RunningInstances.Any())
                 {
-                    StartActivity(new StartActivityIn()
+                    DDLogger.LogInfo<MainEngine>($"DokRouter engine detected {RunningInstances.Count} Running Instances - will trigger the start activity for the current activity of each of those instances");
+
+                    Parallel.ForEach(RunningInstances, runningInstance =>
                     {
-                        PipelineInstanceKey = runningInstance.Key
+                        StartActivity(new StartActivityIn()
+                        {
+                            PipelineInstanceKey = runningInstance.Key
+                        });
                     });
-                });
+                }
+                else
+                {
+                    DDLogger.LogInfo<MainEngine>($"DokRouter engine did not detect any Running Instances");
+                }
+
+                DDLogger.LogInfo<MainEngine>($"DokRouter engine started successfully!");
             }
         }
 
+        /// <summary>
+        /// Private method to fill the hash of the configuration, will depend recursivelly on the fill hash methods of the pipelines and activities
+        /// </summary>
         private static void FillConfigurationHash(DokRouterEngineConfiguration latestEngineConfiguration)
         {
             foreach (var pipelineConfiguration in latestEngineConfiguration.Pipelines)
@@ -142,10 +203,13 @@ namespace Joyn.DokRouter
                 FillConfigurationHash(pipelineConfiguration);
             }
 
-            var hashKey = $"{latestEngineConfiguration.DefaultPipelineIdentifier}|{latestEngineConfiguration.OnStartActivityAssembly}|{latestEngineConfiguration.OnStartActivityClass}|{latestEngineConfiguration.OnStartActivityMethod}|{string.Join("|", latestEngineConfiguration.Pipelines)}";
+            var hashKey = $"{latestEngineConfiguration.DefaultPipelineIdentifier}|{latestEngineConfiguration.OnStartActivityAssembly}|{latestEngineConfiguration.OnStartActivityClass}|{latestEngineConfiguration.OnStartActivityMethod}|{string.Join("|", latestEngineConfiguration.Pipelines.Select(p => p.Hash))}";
             latestEngineConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
         }
 
+        /// <summary>
+        /// Private method to fill the hash of the pipeline configuration, will depend recursivelly on the fill hash method of the activities
+        /// </summary>
         private static void FillConfigurationHash(EDDokRouterEngineConfiguration_Pipelines pipelineConfiguration)
         {
             foreach(var pipelineActivity in pipelineConfiguration.Activities)
@@ -153,10 +217,13 @@ namespace Joyn.DokRouter
                 FillConfigurationHash(pipelineActivity);
             }
 
-            var hashKey = $"{pipelineConfiguration.Name}|{pipelineConfiguration.Identifier}|{string.Join("|", pipelineConfiguration.Activities)}";
+            var hashKey = $"{pipelineConfiguration.Name}|{pipelineConfiguration.Identifier}|{string.Join("|", pipelineConfiguration.Activities.Select(pa => pa.Hash))}";
             pipelineConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
         }
 
+        /// <summary>
+        /// Private method to fill the hash of the activity configuration
+        /// </summary>
         private static void FillConfigurationHash(EDDokRouterEngineConfiguration_Activities pipelineActivity)
         {
             var hashKey = $"{pipelineActivity.Name}|{pipelineActivity.Identifier}|{pipelineActivity.OrderNumber}|{pipelineActivity.Disabled}|{pipelineActivity.Kind}|{pipelineActivity.DirectActivityAssembly}|{pipelineActivity.DirectActivityClass}|{pipelineActivity.DirectActivityMethod}|{pipelineActivity.Url}|{pipelineActivity.KafkaTopic}";
@@ -248,7 +315,6 @@ namespace Joyn.DokRouter
             };
         }
 
-
         /// <summary>
         /// Starts a pipeline with the given payload, will start the default pipeline if no pipeline is specified
         /// </summary>
@@ -274,6 +340,19 @@ namespace Joyn.DokRouter
                 return;
             }
         }
+
+        /// <summary>
+        /// Moves a pipeline instance to an errored state
+        /// </summary>
+        public static void ErrorPipeline(PipelineInstance erroredPipeline, string errorMessage)
+        {
+            erroredPipeline.ErroredAt = DateTime.UtcNow;
+            erroredPipeline.ErrorMessage = errorMessage;
+            DokRouterDAL.ErrorPipelineInstance(erroredPipeline);
+            RunningInstances.TryRemove(erroredPipeline.Key, out _);
+            DDLogger.LogError<MainEngine>($"Pipeline instance {erroredPipeline.Key.PipelineInstanceIdentifier} errored with message: {errorMessage}. It was moved to the error collection and removed from running instances");
+        }
+        
 
         /// <summary>
         /// Starts a pipeline given its definition and the given payload
@@ -431,6 +510,7 @@ namespace Joyn.DokRouter
                 RunningInstances.TryRemove(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out _);
 
                 //Persist to DB - Finished pipeline
+                pipelineInstance.FinishedAt = DateTime.UtcNow;
                 DokRouterDAL.FinishPipelineInstance(pipelineInstance);
             }
         }

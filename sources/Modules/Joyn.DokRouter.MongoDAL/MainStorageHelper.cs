@@ -1,5 +1,4 @@
-﻿using DocDigitizer.Common.DAL.KeyValue;
-using Joyn.DokRouter.Common.Models;
+﻿using Joyn.DokRouter.Common.Models;
 using MongoDB.Bson.Serialization;
 using NHibernate.Type;
 using System;
@@ -12,12 +11,6 @@ namespace Joyn.DokRouter.MongoDAL
 {
     public class MainStorageHelper
     {
-        internal static BaseMongoRegistryInterface<DokRouterEngineConfigurationForMongo> EngineConfigurationStorage;
-        internal static BaseMongoRegistryInterface<DokRouterEngineConfigurationForMongo> EngineConfigurationsArchiveStorage;
-
-        internal static BaseMongoRegistryInterface<PipelineInstanceForMongo> RunningInstancesStorage;
-        internal static BaseMongoRegistryInterface<PipelineInstanceForMongo> FinishedInstancesStorage;
-
         public static void Startup(string connectionString, string databaseName)
         {
             //This code is not working and must be revisited
@@ -32,11 +25,7 @@ namespace Joyn.DokRouter.MongoDAL
             pack.Add(new MongoDB.Bson.Serialization.Conventions.IgnoreExtraElementsConvention(true));
             MongoDB.Bson.Serialization.Conventions.ConventionRegistry.Register("My Solution Conventions", pack, t => true);
 
-            EngineConfigurationStorage = new BaseMongoRegistryInterface<DokRouterEngineConfigurationForMongo>(connectionString, databaseName, "EngineConfiguration");
-            EngineConfigurationsArchiveStorage = new BaseMongoRegistryInterface<DokRouterEngineConfigurationForMongo>(connectionString, databaseName, "EngineConfigurationsArchive");
-
-            RunningInstancesStorage = new BaseMongoRegistryInterface<PipelineInstanceForMongo>(connectionString, databaseName, "RunningPipelineInstances");
-            FinishedInstancesStorage = new BaseMongoRegistryInterface<PipelineInstanceForMongo>(connectionString, databaseName, "FinishedPipelineInstances");
+            BaseMongoMapper.Startup(connectionString, databaseName);
         }
     }
 }

@@ -18,34 +18,32 @@ namespace Joyn.DokRouter.DAL
             return new DokRouterEngineConfiguration();
         }
 
-        public List<DokRouterEngineConfiguration> GetAllEngineConfiguration()
-        {
-            return new List<DokRouterEngineConfiguration>();
-        }
-
         public DokRouterEngineConfiguration GetEngineConfigurationByHash(string hash)
         {
             return new DokRouterEngineConfiguration();
         }
 
-        public bool SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
+        public void SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
         {
-            return true;
         }
 
-        public List<PipelineInstance> GetAllRunningInstances()
+        public (List<PipelineInstance> result, int lastPage) GetRunningInstances(int pageNumber)
         {
-            return new List<PipelineInstance>();
+            return (new List<PipelineInstance>(), 1);
         }
 
-        public bool SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
+        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
         {
-            return true;
         }
 
-        public bool FinishPipelineInstance(PipelineInstance pipelineInstance)
+        public void FinishPipelineInstance(PipelineInstance pipelineInstance)
         {
-            return true;
+            
+        }
+
+        public void ErrorPipelineInstance(PipelineInstance pipelineInstance)
+        {
+            
         }
     }
 }

@@ -11,32 +11,36 @@ namespace Joyn.DokRouter.Common.DAL
 
         DokRouterEngineConfiguration GetLatestEngineConfiguration();
 
-        List<DokRouterEngineConfiguration> GetAllEngineConfiguration();
-
         DokRouterEngineConfiguration GetEngineConfigurationByHash(string hash);
 
-        bool SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration);
+        void SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration);
 
         #endregion
 
         #region Pipeline Instances and execution methods
 
         /// <summary>
-        /// Will obtain all the pipeline instances that are currently runningf rom the persistence layer
+        /// Will obtain, from the persistence layer, the pipeline instances that are currently running
+        /// Notice that this method is paged, so it will return a tuple with the list of instances and the last page number to allow consecutive iterations
         /// </summary>
         /// <returns></returns>
-        List<PipelineInstance> GetAllRunningInstances();
+        (List<PipelineInstance> result, int lastPage) GetRunningInstances(int pageNumber);
 
         /// <summary>
         /// Shall create or update the pipeline instance in the persistence layer
         /// </summary>
-        bool SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance);
+        void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance);
 
         /// <summary>
         /// Shall finish the pipeline instance in the persistence layer and do any operations related (clear, archive, etc.)
         /// </summary>
-        bool FinishPipelineInstance(PipelineInstance pipelineInstance);
+        void FinishPipelineInstance(PipelineInstance pipelineInstance);
 
+        /// <summary>
+        /// Shall mark the pipeline instance as errored in the persistence layer accompanied by the error message
+        /// </summary>
+        void ErrorPipelineInstance(PipelineInstance pipelineInstance);
+        
         #endregion
     }
 }

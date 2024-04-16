@@ -1,4 +1,5 @@
-﻿using Joyn.DokRouter.Common.DAL;
+﻿using DocDigitizer.Common.DAL;
+using Joyn.DokRouter.Common.DAL;
 using Joyn.DokRouter.Common.Models;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 namespace Joyn.DokRouter.MongoDAL
 {
     /// <summary>
-    /// Mock implementation of the DokRouter DAL - it will not persist any data and will always return true
+    /// DokRouter DAL Implementation for MongoDB - Only use after setup of the MainStorageHelper by invoking Startup method on that class
     /// </summary>
     public class DokRouterMongoDAL: IDokRouterDAL
     {
@@ -17,51 +18,62 @@ namespace Joyn.DokRouter.MongoDAL
 
         public DokRouterEngineConfiguration GetLatestEngineConfiguration()
         {
-            var a = MainStorageHelper.EngineConfigurationStorage.ListRegistryObjects();
-            var b = a.Data;
-            var c = b.FirstOrDefault();
-            var d = c?.DokRouterEngineConfiguration;
-            return MainStorageHelper.EngineConfigurationStorage.ListRegistryObjects().Data.FirstOrDefault()?.DokRouterEngineConfiguration;
-        }
-
-        public List<DokRouterEngineConfiguration> GetAllEngineConfiguration()
-        {
-            return MainStorageHelper.EngineConfigurationsArchiveStorage.ListRegistryObjects().Data.Select(ecfm => ecfm.DokRouterEngineConfiguration).ToList();
+            return GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationLatestMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Page = 1, PageSize = 1
+            }).ResultSet.FirstOrDefault()?.DokRouterEngineConfiguration;
         }
 
         public DokRouterEngineConfiguration GetEngineConfigurationByHash(string hash)
         {
-            return MainStorageHelper.EngineConfigurationsArchiveStorage.ReadObject(hash)?.DokRouterEngineConfiguration;
+            return GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationArchiveMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                {
+                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(DokRouterEngineConfigurationForMongoProperties.Hash, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, hash)
+                },
+                Page = 1,
+                PageSize = 1,
+            }).ResultSet.FirstOrDefault()?.DokRouterEngineConfiguration;
         }
 
-        public bool SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
+        public void SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
         {
-            return MainStorageHelper.EngineConfigurationsArchiveStorage.AddOrUpdateObject(new DokRouterEngineConfigurationForMongo(engineConfiguration));
+            GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationArchiveMapper>.UpdateObject(new DokRouterEngineConfigurationForMongo(engineConfiguration));
         }
 
         #endregion
 
         #region Pipeline Instances and execution methods
 
-        public List<PipelineInstance> GetAllRunningInstances()
+        public (List<PipelineInstance> result, int lastPage) GetRunningInstances(int pageNumber)
         {
-            return MainStorageHelper.RunningInstancesStorage.ListRegistryObjects().Data.Select(pifm => pifm.PipelineInstance).ToList();
+            var baseResult = GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Page = pageNumber
+            });
+
+            return (baseResult.ResultSet.Select(r => r.PipelineInstance).ToList(), baseResult.LastPage);
         }
 
-        public bool SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
+        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
         {
-            return MainStorageHelper.RunningInstancesStorage.AddOrUpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
         }
 
-        public bool FinishPipelineInstance(PipelineInstance pipelineInstance)
+        public void FinishPipelineInstance(PipelineInstance pipelineInstance)
         {
             //TODO: Should be executed within a transaction
-            MainStorageHelper.FinishedInstancesStorage.AddOrUpdateObject(new PipelineInstanceForMongo(pipelineInstance));
-            MainStorageHelper.RunningInstancesStorage.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
-            
-            return true;
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceFinishedMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance)); 
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
         }
 
+        public void ErrorPipelineInstance(PipelineInstance pipelineInstance)
+        {
+            //TODO: Should be executed within a transaction
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceErroredMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
+        }
         #endregion
     }
 }

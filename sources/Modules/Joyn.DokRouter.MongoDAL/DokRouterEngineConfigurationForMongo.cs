@@ -1,4 +1,4 @@
-﻿using DocDigitizer.Common.DAL.KeyValue;
+﻿using DocDigitizer.Common.DAL.SimpleMongo;
 using Joyn.DokRouter.Common.Models;
 using System;
 using System.Collections.Generic;
@@ -12,6 +12,7 @@ namespace Joyn.DokRouter.MongoDAL
     {
         public string Id { get; set; }
         public int DefaultRankOrder { get; set; }
+        public string Hash { get; set; }
 
         private DokRouterEngineConfiguration _dokRouterEngineConfiguration;
         public DokRouterEngineConfiguration DokRouterEngineConfiguration
@@ -23,7 +24,7 @@ namespace Joyn.DokRouter.MongoDAL
             set
             {
                 _dokRouterEngineConfiguration = value;
-                Id = value.Hash;
+                Hash = value.Hash;
             }
         }
 
@@ -31,7 +32,12 @@ namespace Joyn.DokRouter.MongoDAL
         public DokRouterEngineConfigurationForMongo(DokRouterEngineConfiguration dokRouterEngineConfiguration) 
         {
             _dokRouterEngineConfiguration = dokRouterEngineConfiguration;
-            Id = dokRouterEngineConfiguration.Hash;
+            Hash = dokRouterEngineConfiguration.Hash;
         }
+    }
+
+    public enum DokRouterEngineConfigurationForMongoProperties
+    {
+        Hash
     }
 }

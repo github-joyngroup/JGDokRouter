@@ -22,6 +22,21 @@ namespace Joyn.DokRouter.Common.Models
         public DateTime StartedAt { get; set; }
 
         /// <summary>
+        /// Timestamp for when the pipeline instance was finished
+        /// </summary>
+        public DateTime? FinishedAt { get; set; }
+
+        /// <summary>
+        /// Timestamp for when the pipeline instance was errored
+        /// </summary>
+        public DateTime? ErroredAt { get; set; }
+
+        /// <summary>
+        /// Error message that was produced during the execution of the pipeline instance
+        /// </summary>
+        public string ErrorMessage { get; set; }
+
+        /// <summary>
         /// External data serialized, will be passed to the activities when they are started and updated when the activities end
         /// </summary>
         public byte[] MarshalledExternalData { get; set; }
