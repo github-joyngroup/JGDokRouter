@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="DocDigitizer.Common.Logging" Version="1.0.5" />
     <PackageReference Include="DocDigitizer.Common.Security" Version="1.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

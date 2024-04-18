@@ -74,6 +74,7 @@ namespace Joyn.DokRouter.MongoDAL
             GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceErroredMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
             GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
         }
+
         #endregion
     }
 }

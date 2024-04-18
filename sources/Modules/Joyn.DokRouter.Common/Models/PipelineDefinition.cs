@@ -20,6 +20,11 @@ namespace Joyn.DokRouter.Common.Models
         /// List of activities that are part of the pipeline
         /// </summary>
         public List<PipelineActivityDefinition> Activities { get; set; }
+
+        /// <summary>
+        /// Common configurations that should be applied to this pipeline activities, might override those on the engine level
+        /// </summary>
+        public CommonConfigurations CommonConfigurations { get; set; }
     }
 
     /// <summary>
@@ -46,6 +51,11 @@ namespace Joyn.DokRouter.Common.Models
         /// Definition of the execution of the activity - How it should be executed when triggered by the engine
         /// </summary>
         public ActivityExecutionDefinition ExecutionDefinition { get; set; }
+
+        /// <summary>
+        /// Common configurations that should be applied to this activity, might override those on the pipeline or engine level
+        /// </summary>
+        public CommonConfigurations CommonConfigurations { get; set; }    
     }
 
     /// <summary>

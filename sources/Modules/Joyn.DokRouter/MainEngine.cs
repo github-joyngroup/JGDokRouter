@@ -48,6 +48,8 @@ namespace Joyn.DokRouter
         /// </summary>
         private static ConcurrentDictionary<PipelineInstanceKey, PipelineInstance> RunningInstances = new ConcurrentDictionary<PipelineInstanceKey, PipelineInstance>();
 
+        private static ConcurrentDictionary<PipelineInstanceKey, ReaderWriterLockSlim> PipelineInstancesLocker = new ConcurrentDictionary<PipelineInstanceKey, ReaderWriterLockSlim>();
+
         /// <summary>
         /// Start up method for the engine, will load the configuration and start the engine, must be invoked prior to any other method
         /// </summary>
@@ -147,7 +149,7 @@ namespace Joyn.DokRouter
 
                     foreach (var pipelineConfiguration in configuration.Pipelines)
                     {
-                        PipelineDefinitions[configuration.Hash].Add(pipelineConfiguration.Identifier, BuildPipelineFromConfiguration(pipelineConfiguration));
+                        PipelineDefinitions[configuration.Hash].Add(pipelineConfiguration.Identifier, BuildPipelineFromConfiguration(pipelineConfiguration, configuration.CommonConfigurations));
                     }
                 }
 
@@ -175,9 +177,10 @@ namespace Joyn.DokRouter
                 if (RunningInstances.Any())
                 {
                     DDLogger.LogInfo<MainEngine>($"DokRouter engine detected {RunningInstances.Count} Running Instances - will trigger the start activity for the current activity of each of those instances");
-
+                    
                     Parallel.ForEach(RunningInstances, runningInstance =>
                     {
+                        PipelineInstancesLocker.TryAdd(runningInstance.Key, new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion));
                         StartActivity(new StartActivityIn()
                         {
                             PipelineInstanceKey = runningInstance.Key
@@ -203,7 +206,7 @@ namespace Joyn.DokRouter
                 FillConfigurationHash(pipelineConfiguration);
             }
 
-            var hashKey = $"{latestEngineConfiguration.DefaultPipelineIdentifier}|{latestEngineConfiguration.OnStartActivityAssembly}|{latestEngineConfiguration.OnStartActivityClass}|{latestEngineConfiguration.OnStartActivityMethod}|{string.Join("|", latestEngineConfiguration.Pipelines.Select(p => p.Hash))}";
+            var hashKey = $"{latestEngineConfiguration.DefaultPipelineIdentifier}|{latestEngineConfiguration.OnStartActivityAssembly}|{latestEngineConfiguration.OnStartActivityClass}|{latestEngineConfiguration.OnStartActivityMethod}|{string.Join("|", latestEngineConfiguration.Pipelines.Select(p => p.Hash))}|{GetCommonConfigurationHash(latestEngineConfiguration.CommonConfigurations)}";
             latestEngineConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
         }
 
@@ -217,7 +220,7 @@ namespace Joyn.DokRouter
                 FillConfigurationHash(pipelineActivity);
             }
 
-            var hashKey = $"{pipelineConfiguration.Name}|{pipelineConfiguration.Identifier}|{string.Join("|", pipelineConfiguration.Activities.Select(pa => pa.Hash))}";
+            var hashKey = $"{pipelineConfiguration.Name}|{pipelineConfiguration.Identifier}|{string.Join("|", pipelineConfiguration.Activities.Select(pa => pa.Hash))}|{GetCommonConfigurationHash(pipelineConfiguration.CommonConfigurations)}";
             pipelineConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
         }
 
@@ -226,8 +229,18 @@ namespace Joyn.DokRouter
         /// </summary>
         private static void FillConfigurationHash(EDDokRouterEngineConfiguration_Activities pipelineActivity)
         {
-            var hashKey = $"{pipelineActivity.Name}|{pipelineActivity.Identifier}|{pipelineActivity.OrderNumber}|{pipelineActivity.Disabled}|{pipelineActivity.Kind}|{pipelineActivity.DirectActivityAssembly}|{pipelineActivity.DirectActivityClass}|{pipelineActivity.DirectActivityMethod}|{pipelineActivity.Url}|{pipelineActivity.KafkaTopic}";
+            var hashKey = $"{pipelineActivity.Name}|{pipelineActivity.Identifier}|{pipelineActivity.OrderNumber}|{pipelineActivity.Disabled}|{pipelineActivity.Kind}|{pipelineActivity.DirectActivityAssembly}|{pipelineActivity.DirectActivityClass}|{pipelineActivity.DirectActivityMethod}|{pipelineActivity.Url}|{pipelineActivity.KafkaTopic}|{GetCommonConfigurationHash(pipelineActivity.CommonConfigurations)}";
             pipelineActivity.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
+        }
+
+        private static string GetCommonConfigurationHash(CommonConfigurations commonConfiguration)
+        {
+            var hashKey = "";
+            if (commonConfiguration != null)
+            {
+                hashKey = $"{commonConfiguration.ActivitySLATimeInSeconds}|{commonConfiguration.ActivityTrySLATimeInSeconds}|{commonConfiguration.RetryOnSLAExpired}|{commonConfiguration.RetryOnSLAExpiredMaxRetries}|{commonConfiguration.RetryOnSLAExpiredDelayInSeconds}|{commonConfiguration.RetryOnError}|{commonConfiguration.RetryOnErrorMaxRetries}|{commonConfiguration.RetryOnErrorDelayInSeconds}";
+            }
+            return DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(hashKey);
         }
 
         /// <summary>
@@ -235,13 +248,18 @@ namespace Joyn.DokRouter
         /// </summary>
         /// <param name="pipelineConfiguration"></param>
         /// <returns></returns>
-        private static PipelineDefinition BuildPipelineFromConfiguration(EDDokRouterEngineConfiguration_Pipelines pipelineConfiguration)
+        private static PipelineDefinition BuildPipelineFromConfiguration(EDDokRouterEngineConfiguration_Pipelines pipelineConfiguration, CommonConfigurations configurationCommonConfigurations)
         {
             return new PipelineDefinition()
             {
                 Name = pipelineConfiguration.Name,
                 Identifier = pipelineConfiguration.Identifier,
-                Activities = pipelineConfiguration.Activities.FindAll(a => !a.Disabled).Select(a => BuildActivityFromConfiguration(a)).OrderBy(a => a.OrderNumber).ToList()
+                Activities = pipelineConfiguration.Activities.FindAll(a => !a.Disabled).Select(a => BuildActivityFromConfiguration(a, configurationCommonConfigurations, pipelineConfiguration.CommonConfigurations)).OrderBy(a => a.OrderNumber).ToList(),
+
+                //Common configurations loading with overriding logic from Default -> Engine -> Pipeline -> Activity
+                CommonConfigurations = CommonConfigurations.DefaultCommonConfigurations.Clone()
+                                                                                       .Override(configurationCommonConfigurations)
+                                                                                       .Override(pipelineConfiguration.CommonConfigurations)
             };
         }
 
@@ -252,12 +270,13 @@ namespace Joyn.DokRouter
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
         /// <exception cref="Exception"></exception>
-        private static PipelineActivityDefinition BuildActivityFromConfiguration(EDDokRouterEngineConfiguration_Activities activityConfiguration)
+        private static PipelineActivityDefinition BuildActivityFromConfiguration(EDDokRouterEngineConfiguration_Activities activityConfiguration, CommonConfigurations configurationCommonConfigurations, CommonConfigurations pipelineConfigurations)
         {
             ActivityExecutionDefinition executionDefinition = new ActivityExecutionDefinition();
             
             try
             {
+                //Kind of activity and corresponding specific definition loading
                 executionDefinition.Kind = activityConfiguration.Kind;
                 switch(executionDefinition.Kind)
                 {
@@ -305,13 +324,20 @@ namespace Joyn.DokRouter
                 throw new Exception($"Error loading activity {activityConfiguration.Name} from configuration", ex);
             }
 
+            //Common configurations loading with overriding logic from Default -> Engine -> Pipeline -> Activity
+            var commonConfigurationToApply = CommonConfigurations.DefaultCommonConfigurations.Clone()
+                                                                                             .Override(configurationCommonConfigurations)
+                                                                                             .Override(pipelineConfigurations)
+                                                                                             .Override(activityConfiguration.CommonConfigurations);
+
             return new PipelineActivityDefinition()
             {
                 Name = activityConfiguration.Name,
                 Identifier = activityConfiguration.Identifier,
                 OrderNumber = activityConfiguration.OrderNumber,
 
-                ExecutionDefinition = executionDefinition
+                ExecutionDefinition = executionDefinition,
+                CommonConfigurations = commonConfigurationToApply
             };
         }
 
@@ -346,11 +372,27 @@ namespace Joyn.DokRouter
         /// </summary>
         public static void ErrorPipeline(PipelineInstance erroredPipeline, string errorMessage)
         {
-            erroredPipeline.ErroredAt = DateTime.UtcNow;
-            erroredPipeline.ErrorMessage = errorMessage;
-            DokRouterDAL.ErrorPipelineInstance(erroredPipeline);
-            RunningInstances.TryRemove(erroredPipeline.Key, out _);
-            DDLogger.LogError<MainEngine>($"Pipeline instance {erroredPipeline.Key.PipelineInstanceIdentifier} errored with message: {errorMessage}. It was moved to the error collection and removed from running instances");
+            PipelineInstancesLocker.TryGetValue(erroredPipeline.Key, out var locker);
+            if (locker == null)
+            {
+                //Pipeline not running anymore
+                DDLogger.LogWarn<MainEngine>($"Pipeline instance {erroredPipeline.Key} not found in running instances - Request for ErrorPipeline will be discarded");
+                return;
+            }
+            locker.EnterWriteLock();
+            try
+            {
+                erroredPipeline.ErroredAt = DateTime.UtcNow;
+                erroredPipeline.ErrorMessage = errorMessage;
+                DokRouterDAL.ErrorPipelineInstance(erroredPipeline);
+                RunningInstances.TryRemove(erroredPipeline.Key, out _);
+                PipelineInstancesLocker.TryRemove(erroredPipeline.Key, out _);
+                DDLogger.LogError<MainEngine>($"Pipeline instance {erroredPipeline.Key.PipelineInstanceIdentifier} errored with message: {errorMessage}. It was moved to the error collection and removed from running instances");
+            }
+            finally
+            {
+                locker.ExitWriteLock();
+            }
         }
         
 
@@ -371,14 +413,17 @@ namespace Joyn.DokRouter
                     PipelineInstanceIdentifier = Guid.NewGuid()
                 },
                 CurrentActivityIndex = 0,
+                Name = pipelineDefinition.Name,
                 StartedAt = DateTime.UtcNow,
+                PipelineSLAMoment = DateTime.UtcNow.AddSeconds(pipelineDefinition.CommonConfigurations.PipelineSLATimeInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.PipelineSLATimeInSeconds.Value),
                 MarshalledExternalData = startPipelinePayload.MarshalledExternalData,
 
-                ActivityExecutions = new Dictionary<int, Dictionary<ActivityExecutionKey, ActivityExecution>>()
+                ActivityInstances = new Dictionary<int, ActivityInstance>()
             };
 
             //Add to running instances
             RunningInstances.TryAdd(pipelineInstance.Key, pipelineInstance);
+            PipelineInstancesLocker.TryAdd(pipelineInstance.Key, new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion));
 
             //Persist to DB
             DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
@@ -398,57 +443,132 @@ namespace Joyn.DokRouter
         /// <param name="startActivityPayload"></param>
         public static void StartActivity(StartActivityIn startActivityPayload)
         {
-            if (!PipelineDefinitions[startActivityPayload.PipelineInstanceKey.ConfigurationHash].TryGetValue(startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
+            PipelineInstancesLocker.TryGetValue(startActivityPayload.PipelineInstanceKey, out var locker);
+            if (locker == null)
             {
-                DDLogger.LogError<MainEngine>($"No pipeline definition found for identifier: {startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier}");
-                return;
-            }            
-
-            if (!RunningInstances.TryGetValue(startActivityPayload.PipelineInstanceKey, out var pipelineInstance))
-            {
-                DDLogger.LogError<MainEngine>($"Cannot find running instance: {startActivityPayload.PipelineInstanceKey.PipelineInstanceIdentifier} for pipeline definition: {pipelineDefinition} ({pipelineDefinition.Identifier})");
+                //Pipeline not running anymore
+                DDLogger.LogWarn<MainEngine>($"Pipeline instance {startActivityPayload.PipelineInstanceKey} not found in running instances - Request for StartActivity will be discarded");
                 return;
             }
-
-            if (pipelineInstance.CurrentActivityIndex >= pipelineDefinition.Activities.Count)
+            locker.EnterWriteLock();
+            try
             {
-                DDLogger.LogError<MainEngine>($"Current index overflow, cannot start activity index {pipelineInstance.CurrentActivityIndex} for pipeline {pipelineDefinition} ({pipelineDefinition.Identifier}) as it only defines {pipelineDefinition.Activities.Count} activities");
-                return;
-            }
-
-            var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
-            DDLogger.LogDebug<MainEngine>($"Starting activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
-
-            if (!pipelineInstance.ActivityExecutions.ContainsKey(pipelineInstance.CurrentActivityIndex)) { pipelineInstance.ActivityExecutions.Add(pipelineInstance.CurrentActivityIndex, new Dictionary<ActivityExecutionKey, ActivityExecution>()); }
-
-            var activityExecutionKey = new ActivityExecutionKey()
-            {
-                PipelineInstanceKey = pipelineInstance.Key,
-                ActivityDefinitionIdentifier = activityDefinition.Identifier,
-                ActivityExecutionIdentifier = Guid.NewGuid()
-            };
-
-            pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex].Add(activityExecutionKey, new ActivityExecution()
-            {
-                Key = activityExecutionKey,
-                StartedAt = DateTime.UtcNow
-            });
-
-            Task.Run(() =>
-            {
-                OnStartActivityHandlers[startActivityPayload.PipelineInstanceKey.ConfigurationHash](activityDefinition.ExecutionDefinition, new StartActivityOut()
+                if (!PipelineDefinitions[startActivityPayload.PipelineInstanceKey.ConfigurationHash].TryGetValue(startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
                 {
-                    ActivityExecutionKey = activityExecutionKey,
-                    MarshalledExternalData = pipelineInstance.MarshalledExternalData
+                    DDLogger.LogError<MainEngine>($"No pipeline definition found for identifier: {startActivityPayload.PipelineInstanceKey.PipelineDefinitionIdentifier}");
+                    return;
+                }
+
+                if (!RunningInstances.TryGetValue(startActivityPayload.PipelineInstanceKey, out var pipelineInstance))
+                {
+                    DDLogger.LogError<MainEngine>($"Cannot find running instance: {startActivityPayload.PipelineInstanceKey.PipelineInstanceIdentifier} for pipeline definition: {pipelineDefinition} ({pipelineDefinition.Identifier})");
+                    return;
+                }
+
+                if (pipelineInstance.CurrentActivityIndex >= pipelineDefinition.Activities.Count)
+                {
+                    DDLogger.LogError<MainEngine>($"Current index overflow, cannot start activity index {pipelineInstance.CurrentActivityIndex} for pipeline {pipelineDefinition} ({pipelineDefinition.Identifier}) as it only defines {pipelineDefinition.Activities.Count} activities");
+                    ErrorPipeline(pipelineInstance, $"Inconsistent Pipeline: Current index overflow, cannot start activity index {pipelineInstance.CurrentActivityIndex}");
+                    return;
+                }
+
+                var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
+                DDLogger.LogDebug<MainEngine>($"Starting activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+
+                //EPocas, 18-04-2024 - This code might be useful if we want parallel executions under the same step
+                //if (!pipelineInstance.ActivityInstances.ContainsKey(pipelineInstance.CurrentActivityIndex)) 
+                //{ 
+                //    pipelineInstance.ActivityInstances.Add(pipelineInstance.CurrentActivityIndex, new Dictionary<Guid, ActivityInstance>()); 
+                //}
+
+                //if (!pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].ContainsKey(activityDefinition.Identifier))
+                //{
+                //    pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Add(activityDefinition.Identifier, new ActivityInstance()
+                //    {
+                //        Name = activityDefinition.Name,
+                //        StartedAt = DateTime.UtcNow,
+                //        ActivitySLAMoment = DateTime.UtcNow.AddSeconds(activityDefinition.CommonConfigurations.ActivitySLATimeInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.ActivitySLATimeInSeconds.Value),
+                //        Executions = new List<ActivityExecution>()
+                //    });
+                //}
+
+                if (!pipelineInstance.ActivityInstances.ContainsKey(pipelineInstance.CurrentActivityIndex))
+                {
+                    pipelineInstance.ActivityInstances.Add(pipelineInstance.CurrentActivityIndex, new ActivityInstance()
+                    {
+                        Name = activityDefinition.Name,
+                        StartedAt = DateTime.UtcNow,
+                        ActivitySLAMoment = DateTime.UtcNow.AddSeconds(activityDefinition.CommonConfigurations.ActivitySLATimeInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.ActivitySLATimeInSeconds.Value),
+                        Executions = new List<ActivityExecution>()
+                    });
+                }
+
+
+                if (pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions.Any())
+                {
+                    //Not first execution of activity, meaning we are doing some retry, aditional actions are needed
+
+                    //All previous activity executions should be flagged as errored
+                    foreach (var activityExecution in pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions)
+                    {
+                        if (!activityExecution.EndedAt.HasValue)
+                        {
+                            activityExecution.EndedAt = DateTime.UtcNow;
+                            activityExecution.IsSuccess = false;
+                            activityExecution.ErrorMessage = "Another execution started before this one ended";
+                        }
+                    }
+
+                    //Check if there are any retries available
+                    if (pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions.Count >= activityDefinition.CommonConfigurations.RetryOnSLAExpiredMaxRetries + 1)
+                    {
+                        //No more executions! Do not start the activity, terminate the pipeline instead
+                        DDLogger.LogError<MainEngine>($"activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} reached limit of retries. Pipeline will be errored");
+                        ErrorPipeline(pipelineInstance, $"Activity {activityDefinition.Name} reached limit of retries");
+                        return;
+                    }
+
+                    //Check if retry obeys the delay
+                    if (DateTime.UtcNow < pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions.Last().EndedAt.Value.AddSeconds(activityDefinition.CommonConfigurations.RetryOnSLAExpiredDelayInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.RetryOnSLAExpiredDelayInSeconds.Value))
+                    {
+                        //Retry not allowed yet, wait for the delay to pass
+                        DDLogger.LogDebug<MainEngine>($"Activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} required retry within delay period");
+                        return;
+                    }
+                }
+
+                var activityExecutionKey = new ActivityExecutionKey()
+                {
+                    PipelineInstanceKey = pipelineInstance.Key,
+                    ActivityDefinitionIdentifier = activityDefinition.Identifier,
+                    ActivityExecutionIdentifier = Guid.NewGuid()
+                };
+
+                pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions.Add(new ActivityExecution()
+                {
+                    Key = activityExecutionKey,
+                    StartedAt = DateTime.UtcNow,
+                    ActivityTrySLAMoment = DateTime.UtcNow.AddSeconds(activityDefinition.CommonConfigurations.ActivityTrySLATimeInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.ActivityTrySLATimeInSeconds.Value),
                 });
-            });
 
-            DDLogger.LogInfo<MainEngine>($"Started activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+                Task.Run(() =>
+                {
+                    OnStartActivityHandlers[startActivityPayload.PipelineInstanceKey.ConfigurationHash](activityDefinition.ExecutionDefinition, new StartActivityOut()
+                    {
+                        ActivityExecutionKey = activityExecutionKey,
+                        MarshalledExternalData = pipelineInstance.MarshalledExternalData
+                    });
+                });
 
-            //Persist to DB
-            DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
-            //EPocas, 11-04-2024 - Check if needed as recovery only requires the pipeline instance
-            //DokRouterDAL.StartActivityExecution(activityExecutionKey);
+                DDLogger.LogInfo<MainEngine>($"Started activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+
+                //Persist to DB
+                DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+            }
+            finally
+            {
+                locker.ExitWriteLock();
+            }
         }
 
         /// <summary>
@@ -457,61 +577,102 @@ namespace Joyn.DokRouter
         /// </summary>
         public static void EndActivity(EndActivity endActivityPayload)
         {
-            if (!PipelineDefinitions[endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.ConfigurationHash].TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
+            PipelineInstancesLocker.TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out var locker);
+            if (locker == null)
             {
-                DDLogger.LogError<MainEngine>($"No pipeline definition found for identifier: {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineDefinitionIdentifier}");
+                //Pipeline not running anymore
+                DDLogger.LogWarn<MainEngine>($"Pipeline instance {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineInstanceIdentifier} not found in running instances - Request for EndActivity will be discarded");
                 return;
             }
-
-            if (!RunningInstances.TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out var pipelineInstance))
+            locker.EnterWriteLock();
+            try
             {
-                DDLogger.LogError<MainEngine>($"Cannot find running instance: {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineInstanceIdentifier} for pipeline definition: {pipelineDefinition} ({pipelineDefinition.Identifier})");
-                return;
-            }
-            
-            //Used for logging and for detecting next activity
-            var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
-
-            var activityExecutionKey = endActivityPayload.ActivityExecutionKey;
-            if (pipelineInstance.ActivityExecutions.ContainsKey(pipelineInstance.CurrentActivityIndex) && pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex].ContainsKey(activityExecutionKey))
-            {
-                pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][activityExecutionKey].EndedAt = DateTime.UtcNow;
-                pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][activityExecutionKey].IsSuccess = endActivityPayload.IsSuccess;
-                pipelineInstance.ActivityExecutions[pipelineInstance.CurrentActivityIndex][activityExecutionKey].ErrorMessage = endActivityPayload.ErrorMessage;
-            }
-
-            //Update model
-            pipelineInstance.MarshalledExternalData = endActivityPayload.MarshalledExternalData;
-
-            //Move to next activity
-            pipelineInstance.CurrentActivityIndex++;
-
-            //Persist to DB - Finished activity
-            DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
-            //EPocas, 11-04-2024 - Check if needed as recovery only requires the pipeline instance
-            //DokRouterDAL.EndActivityExecution(endActivityPayload.ActivityExecutionKey);
-
-            DDLogger.LogInfo<MainEngine>($"Ended activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
-
-            //Check if there are activities available
-            if (pipelineInstance.CurrentActivityIndex < pipelineDefinition.Activities.Count)
-            {
-                StartActivity(new StartActivityIn()
+                if (!PipelineDefinitions[endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.ConfigurationHash].TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineDefinitionIdentifier, out var pipelineDefinition))
                 {
-                    PipelineInstanceKey = endActivityPayload.ActivityExecutionKey.PipelineInstanceKey
-                });
+                    DDLogger.LogError<MainEngine>($"No pipeline definition found for identifier: {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineDefinitionIdentifier}");
+                    return;
+                }
+
+                if (!RunningInstances.TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out var pipelineInstance))
+                {
+                    DDLogger.LogError<MainEngine>($"Cannot find running instance: {endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineInstanceIdentifier} for pipeline definition: {pipelineDefinition} ({pipelineDefinition.Identifier})");
+                    return;
+                }
+
+                //Used for logging and for detecting next activity
+                var activityDefinition = pipelineDefinition.Activities[pipelineInstance.CurrentActivityIndex];
+
+                var activityExecutionKey = endActivityPayload.ActivityExecutionKey;
+                if (pipelineInstance.ActivityInstances.ContainsKey(pipelineInstance.CurrentActivityIndex))
+                {
+                    var activityInstance = pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex];
+                    var activityExecution = pipelineInstance.ActivityInstances[pipelineInstance.CurrentActivityIndex].Executions.FirstOrDefault(e => e.Key.Equals(activityExecutionKey));
+
+                    if (activityExecution == null)
+                    {
+                        DDLogger.LogError<MainEngine>($"Execution {activityExecutionKey.ActivityExecutionIdentifier} for activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} attempted to finish but was not found! Nothing will be done.");
+                        return;
+                    }
+
+                    if (activityExecution.EndedAt.HasValue)
+                    {
+                        DDLogger.LogWarn<MainEngine>($"Execution {activityExecutionKey.ActivityExecutionIdentifier} for activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} attempted to finish but already ended! Nothing will be done.");
+                        return;
+                    }
+
+                    if (activityInstance.EndedAt.HasValue)
+                    {
+                        DDLogger.LogWarn<MainEngine>($"Activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} attempted to finish but already ended! Nothing will be done.");
+                        return;
+                    }
+
+                    activityInstance.EndedAt = DateTime.UtcNow;
+                    activityInstance.IsSuccess = endActivityPayload.IsSuccess;
+                    activityInstance.ErrorMessage = endActivityPayload.ErrorMessage;
+
+                    activityExecution.EndedAt = DateTime.UtcNow;
+                    activityExecution.IsSuccess = endActivityPayload.IsSuccess;
+                    activityExecution.ErrorMessage = endActivityPayload.ErrorMessage;
+                }
+
+                //Update model
+                pipelineInstance.MarshalledExternalData = endActivityPayload.MarshalledExternalData;
+
+                //Move to next activity
+                pipelineInstance.CurrentActivityIndex++;
+
+                //Persist to DB - Finished activity
+                DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+                //EPocas, 11-04-2024 - Check if needed as recovery only requires the pipeline instance
+                //DokRouterDAL.EndActivityExecution(endActivityPayload.ActivityExecutionKey);
+
+                DDLogger.LogInfo<MainEngine>($"Ended activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+
+                //Check if there are activities available
+                if (pipelineInstance.CurrentActivityIndex < pipelineDefinition.Activities.Count)
+                {
+                    StartActivity(new StartActivityIn()
+                    {
+                        PipelineInstanceKey = endActivityPayload.ActivityExecutionKey.PipelineInstanceKey
+                    });
+                }
+                else
+                {
+                    //Reached the end of the pipeline
+                    DDLogger.LogInfo<MainEngine>($"Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) finished instance with identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+
+                    //Remove from running instances
+                    RunningInstances.TryRemove(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out _);
+                    PipelineInstancesLocker.TryRemove(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out _);
+
+                    //Persist to DB - Finished pipeline
+                    pipelineInstance.FinishedAt = DateTime.UtcNow;
+                    DokRouterDAL.FinishPipelineInstance(pipelineInstance);
+                }
             }
-            else
+            finally
             {
-                //Reached the end of the pipeline
-                DDLogger.LogInfo<MainEngine>($"Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) finished instance with identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
-
-                //Remove from running instances
-                RunningInstances.TryRemove(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out _);
-
-                //Persist to DB - Finished pipeline
-                pipelineInstance.FinishedAt = DateTime.UtcNow;
-                DokRouterDAL.FinishPipelineInstance(pipelineInstance);
+                locker.ExitWriteLock();
             }
         }
     }
