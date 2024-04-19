@@ -57,6 +57,12 @@
         "DokRouterServerTester": {},
         "DokRouterClientTester": {}
       }
+    },
+    "DokRouter Server+LLMDemo": {
+      "Projects": {
+        "DokRouterServerTester": {},
+        "DokRouterLLMDemo": {}
+      }
     }
-    }
+  }
 }
