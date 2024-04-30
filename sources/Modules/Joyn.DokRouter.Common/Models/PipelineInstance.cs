@@ -12,6 +12,11 @@ namespace Joyn.DokRouter.Common.Models
         public PipelineInstanceKey Key { get; set; }
 
         /// <summary>
+        /// The identifier of the transaction, if this pipeline is part of a transaction with other pipelines, procedures or processes, they will all share the same Transaction Id
+        /// </summary>
+        public Guid TransactionIdentifier { get; set; }
+
+        /// <summary>
         /// Name of the pipeline, used mainly for logging and debugging purposes
         /// </summary>
         public string Name { get; set; }

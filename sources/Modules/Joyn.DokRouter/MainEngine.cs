@@ -8,6 +8,7 @@ using Joyn.DokRouter.Common.DAL;
 using System.Linq;
 using System.Xml.Linq;
 using System;
+using Joyn.Timelog.Common.Models;
 
 namespace Joyn.DokRouter
 {
@@ -48,7 +49,16 @@ namespace Joyn.DokRouter
         /// </summary>
         private static ConcurrentDictionary<PipelineInstanceKey, PipelineInstance> RunningInstances = new ConcurrentDictionary<PipelineInstanceKey, PipelineInstance>();
 
+        /// <summary>
+        /// Dictionary to hold lockers for each pipeline instance, indexed by their key
+        /// </summary>
         private static ConcurrentDictionary<PipelineInstanceKey, ReaderWriterLockSlim> PipelineInstancesLocker = new ConcurrentDictionary<PipelineInstanceKey, ReaderWriterLockSlim>();
+
+
+        /// <summary>
+        /// Dictionary to hold log messages that were started but not yet finished, indexed by their key
+        /// </summary>
+        private static ConcurrentDictionary<Guid, LogMessage> StartedLogMessages = new ConcurrentDictionary<Guid, LogMessage>();
 
         /// <summary>
         /// Start up method for the engine, will load the configuration and start the engine, must be invoked prior to any other method
@@ -412,6 +422,8 @@ namespace Joyn.DokRouter
                     PipelineDefinitionIdentifier = pipelineDefinition.Identifier,
                     PipelineInstanceIdentifier = Guid.NewGuid()
                 },
+                TransactionIdentifier = startPipelinePayload.TransactionIdentifier ?? Guid.NewGuid(), //Should the new one follow some pattern so we know it was generated here? Like 0000c4a3-2cdd-40c5-9227-85d290fbfa28
+
                 CurrentActivityIndex = 0,
                 Name = pipelineDefinition.Name,
                 StartedAt = DateTime.UtcNow,
@@ -428,7 +440,12 @@ namespace Joyn.DokRouter
             //Persist to DB
             DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
 
+            //Timelog start of the pipeline
+            var startMessage = Timelog.Client.Logger.LogStart(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Pipeline, pipelineInstance.TransactionIdentifier, pipelineInstance.Key.PipelineInstanceIdentifier, null);
+            StartedLogMessages[pipelineInstance.Key.PipelineInstanceIdentifier] = startMessage;
+
             DDLogger.LogInfo<MainEngine>($"Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) started new instance with identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
+            
 
             //Trigger start of first activity
             StartActivity(new StartActivityIn()
@@ -564,6 +581,10 @@ namespace Joyn.DokRouter
 
                 //Persist to DB
                 DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+
+                //Timelog start of the activity
+                var startMessage = Timelog.Client.Logger.LogStart(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Activity, pipelineInstance.TransactionIdentifier, activityExecutionKey.ActivityExecutionIdentifier, null);
+                StartedLogMessages[activityExecutionKey.ActivityExecutionIdentifier] = startMessage;
             }
             finally
             {
@@ -646,6 +667,12 @@ namespace Joyn.DokRouter
                 //EPocas, 11-04-2024 - Check if needed as recovery only requires the pipeline instance
                 //DokRouterDAL.EndActivityExecution(endActivityPayload.ActivityExecutionKey);
 
+                //Timelog stop of the activity
+                if(StartedLogMessages.TryGetValue(activityExecutionKey.ActivityExecutionIdentifier, out var startMessage))
+                { Timelog.Client.Logger.LogStop(startMessage); }
+                else 
+                { Timelog.Client.Logger.LogStop(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Activity, pipelineInstance.TransactionIdentifier, activityExecutionKey.ActivityExecutionIdentifier, null); }
+
                 DDLogger.LogInfo<MainEngine>($"Ended activity {activityDefinition.Name} ({activityDefinition.Identifier}) in Pipeline {pipelineDefinition.Name} ({pipelineDefinition.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
                 //Check if there are activities available
@@ -668,6 +695,13 @@ namespace Joyn.DokRouter
                     //Persist to DB - Finished pipeline
                     pipelineInstance.FinishedAt = DateTime.UtcNow;
                     DokRouterDAL.FinishPipelineInstance(pipelineInstance);
+
+                    //Timelog stop of the pipeline
+                    if(StartedLogMessages.TryGetValue(pipelineInstance.Key.PipelineInstanceIdentifier, out var startPipelineLogMessage))
+                    { Timelog.Client.Logger.LogStop(startPipelineLogMessage); }
+                    else
+                    { Timelog.Client.Logger.LogStop(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Pipeline, pipelineInstance.TransactionIdentifier, pipelineInstance.Key.PipelineInstanceIdentifier, null); }
+
                 }
             }
             finally
