@@ -21,7 +21,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouter.Common", "Mo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouter.MongoDAL", "Modules\Joyn.DokRouter.MongoDAL\Joyn.DokRouter.MongoDAL.csproj", "{7910C0A4-8FFE-480D-AA4A-29B4408F363C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DokRouterLLMDemo", "Runners\DokRouterLLMDemo\DokRouterLLMDemo.csproj", "{4E29D432-A8F4-47DD-ACE6-310DFA01A306}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DokRouterLLMDemo", "Runners\DokRouterLLMDemo\DokRouterLLMDemo.csproj", "{4E29D432-A8F4-47DD-ACE6-310DFA01A306}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DokRouterServer", "Runners\DokRouterServer\DokRouterServer.csproj", "{692E6F07-D82D-42C5-901E-7A34B4C265A0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -57,6 +59,10 @@ Global
 		{4E29D432-A8F4-47DD-ACE6-310DFA01A306}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4E29D432-A8F4-47DD-ACE6-310DFA01A306}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4E29D432-A8F4-47DD-ACE6-310DFA01A306}.Release|Any CPU.Build.0 = Release|Any CPU
+		{692E6F07-D82D-42C5-901E-7A34B4C265A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{692E6F07-D82D-42C5-901E-7A34B4C265A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{692E6F07-D82D-42C5-901E-7A34B4C265A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{692E6F07-D82D-42C5-901E-7A34B4C265A0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -69,6 +75,7 @@ Global
 		{598F18E9-28FB-4908-A6F9-9E41FD95F40D} = {61AE0BF5-68D0-4650-B653-632886305602}
 		{7910C0A4-8FFE-480D-AA4A-29B4408F363C} = {61AE0BF5-68D0-4650-B653-632886305602}
 		{4E29D432-A8F4-47DD-ACE6-310DFA01A306} = {22588772-957E-4FE3-BCBE-59561C5AF831}
+		{692E6F07-D82D-42C5-901E-7A34B4C265A0} = {22588772-957E-4FE3-BCBE-59561C5AF831}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A47E8118-77E3-44E0-AC47-FD0A66CC41FE}
