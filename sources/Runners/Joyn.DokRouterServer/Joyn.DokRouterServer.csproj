@@ -16,5 +16,5 @@
     <ProjectReference Include="..\..\Modules\Joyn.DokRouter.MongoDAL\Joyn.DokRouter.MongoDAL.csproj" />
     <ProjectReference Include="..\..\Modules\Joyn.DokRouter\Joyn.DokRouter.csproj" />
   </ItemGroup>
-  
+
 </Project>

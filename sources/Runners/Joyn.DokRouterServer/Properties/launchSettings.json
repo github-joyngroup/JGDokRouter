@@ -4,12 +4,12 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:46043",
-      "sslPort": 44357
+      "applicationUrl": "http://localhost:25486",
+      "sslPort": 44319
     }
   },
   "profiles": {
-    "DokRouterServer": {
+    "Joyn.DokRouterServer": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,

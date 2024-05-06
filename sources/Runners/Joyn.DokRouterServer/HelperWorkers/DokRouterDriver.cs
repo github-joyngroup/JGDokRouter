@@ -2,7 +2,7 @@
 using Joyn.DokRouter.Common.Payloads;
 using System.Text;
 
-namespace DokRouterServer.HelperWorkers
+namespace Joyn.DokRouterServer.HelperWorkers
 {
     public class DokRouterDriver
     {

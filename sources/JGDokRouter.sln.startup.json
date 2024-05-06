@@ -54,14 +54,14 @@
   "MultiProjectConfigurations": {
     "DokRouter Server+Client": {
       "Projects": {
-        "DokRouterServer": {},
-        "DokRouterClientTester": {}
+        "Joyn.DokRouterServer": {},
+        "Joyn.DokRouterClientTester": {}
       }
     },
     "DokRouter Server+LLMDemo": {
       "Projects": {
-        "DokRouterServer": {},
-        "DokRouterLLMDemo": {}
+        "Joyn.DokRouterServer": {},
+        "Joyn.DokRouterLLMDemo": {}
       }
     }
   }

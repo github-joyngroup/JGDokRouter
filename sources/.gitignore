@@ -97,4 +97,4 @@ env_configs
 #DocDigitizer PI
 Testers/DokRouterClientTester
 Testers/DokRouterServerTester
-Runners/DokRouterLLMDemo
+Runners/Joyn.DokRouterLLMDemo

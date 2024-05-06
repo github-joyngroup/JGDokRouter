@@ -2,7 +2,7 @@
 using Joyn.DokRouter;
 using Microsoft.AspNetCore.Mvc;
 
-namespace DokRouterServer.Controllers
+namespace Joyn.DokRouterServer.Controllers
 {
     [ApiController]
     [Route("[controller]")]
