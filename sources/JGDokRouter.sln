@@ -21,14 +21,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouter.MongoDAL", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_docker", "_docker", "{10C74EBC-5AF1-48B4-8A9B-01FF9DEFB2FD}"
 	ProjectSection(SolutionItems) = preProject
+		..\docker\Joyn.DokRouterLLMDemo.Dockerfile = ..\docker\Joyn.DokRouterLLMDemo.Dockerfile
 		..\docker\Joyn.DokRouterServer.Dockerfile = ..\docker\Joyn.DokRouterServer.Dockerfile
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{32A749FF-249C-487A-835B-16CC9A2D3C12}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Joyn.DokRouterLLMDemo", "Runners\Joyn.DokRouterLLMDemo\Joyn.DokRouterLLMDemo.csproj", "{AF4D3502-C2C9-4D39-BE35-B9A9C7AF4443}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouterLLMDemo", "Runners\Joyn.DokRouterLLMDemo\Joyn.DokRouterLLMDemo.csproj", "{AF4D3502-C2C9-4D39-BE35-B9A9C7AF4443}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Joyn.DokRouterServer", "Runners\Joyn.DokRouterServer\Joyn.DokRouterServer.csproj", "{775B1A97-1813-4788-8363-9EDAFCBF4C9E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouterServer", "Runners\Joyn.DokRouterServer\Joyn.DokRouterServer.csproj", "{775B1A97-1813-4788-8363-9EDAFCBF4C9E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
