@@ -45,13 +45,20 @@ try
 
     logger.LogInformation("Running Startup for services");
     logger.LogDebug("Starting up Timelog Client");
-    
+
     var timeloggerConfiguration = app.Configuration.GetSection("TimelogClient").Get<Joyn.Timelog.Client.LoggerConfiguration>();
 
     logger.LogDebug($"LoggerConfiguration:\r\n{(timeloggerConfiguration != null ? System.Text.Json.JsonSerializer.Serialize(timeloggerConfiguration) : "NULL!")}");
 
     Joyn.Timelog.Client.Logger.Startup(Guid.Parse(app.Configuration["ApplicationKey"]), timeloggerConfiguration, logger);
+}
+catch (Exception ex)
+{
+    DDLogger.LogException<Program>("Unable to startup Timelog Client. Will continue without timelog capabilities", ex);
+}
 
+try 
+{ 
     Joyn.DokRouter.MongoDAL.MainStorageHelper.Startup(app.Configuration["MongoConnection"], app.Configuration["MongoDatabaseName"]);
     DokRouterDriver.Startup(app.Configuration["EndActivityCallbackUrl"]);
 
