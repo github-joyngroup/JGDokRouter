@@ -42,7 +42,6 @@ DDLogger.Startup(logger);
 
 try
 {
-
     logger.LogInformation("Running Startup for services");
     logger.LogDebug("Starting up Timelog Client");
 

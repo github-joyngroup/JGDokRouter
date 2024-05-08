@@ -21,7 +21,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouter.MongoDAL", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_docker", "_docker", "{10C74EBC-5AF1-48B4-8A9B-01FF9DEFB2FD}"
 	ProjectSection(SolutionItems) = preProject
+		..\docker\Joyn.DokRouterLLMDemo.DockerCompose.yml = ..\docker\Joyn.DokRouterLLMDemo.DockerCompose.yml
 		..\docker\Joyn.DokRouterLLMDemo.Dockerfile = ..\docker\Joyn.DokRouterLLMDemo.Dockerfile
+		..\docker\Joyn.DokRouterServer.DockerCompose.yml = ..\docker\Joyn.DokRouterServer.DockerCompose.yml
 		..\docker\Joyn.DokRouterServer.Dockerfile = ..\docker\Joyn.DokRouterServer.Dockerfile
 	EndProjectSection
 EndProject
