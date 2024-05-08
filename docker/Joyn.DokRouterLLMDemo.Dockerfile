@@ -24,6 +24,24 @@ RUN chmod 777 /logs
 RUN mkdir /files
 RUN chmod 777 /files
 
+RUN mkdir /files/Uploads
+RUN chmod 777 /files/Uploads
+
+RUN mkdir /files/Errors
+RUN chmod 777 /files/Errors
+
+RUN mkdir /files/Finish
+RUN chmod 777 /files/Finish
+
+RUN mkdir /security
+RUN chmod 777 /security
+
+RUN mkdir /ChatGPTPrompts
+RUN chmod 777 /ChatGPTPrompts
+
+RUN mkdir /SubClasses
+RUN chmod 777 /SubClasses
+
 ENTRYPOINT ["dotnet", "Joyn.DokRouterLLMDemo.dll"]
 
 #RUN ls -la /src/

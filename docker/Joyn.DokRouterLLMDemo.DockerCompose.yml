@@ -9,3 +9,6 @@ services:
       - "./volumes/jgdokrouterllmdemo/configurations/appsettings.json:/app/appsettings.json"
       - "./volumes/jgdokrouterllmdemo/logs:/logs"
       - "./volumes/jgdokrouterllmdemo/files:/files"
+      - "./volumes/jgdokrouterllmdemo/security:/security"
+      - "./volumes/jgdokrouterllmdemo/configurations/ChatGPTPrompts:/ChatGPTPrompts"
+      - "./volumes/jgdokrouterllmdemo/configurations/SubClasses:/SubClasses"
