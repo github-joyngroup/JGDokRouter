@@ -49,7 +49,7 @@ try
     var timeloggerConfiguration = app.Configuration.GetSection("TimelogClient").Get<Joyn.Timelog.Client.LoggerConfiguration>();
     logger.LogDebug($"LoggerConfiguration:\r\n{(timeloggerConfiguration != null ? System.Text.Json.JsonSerializer.Serialize(timeloggerConfiguration) : "NULL!")}"); 
     
-    if (timeloggerConfiguration.Disabled)
+    if (!timeloggerConfiguration.Disabled)
     {
         Joyn.Timelog.Client.Logger.Startup(Guid.Parse(app.Configuration["ApplicationKey"]), timeloggerConfiguration, logger);
     }
@@ -60,7 +60,7 @@ try
 }
 catch (Exception ex)
 {
-    DDLogger.LogException<Program>("Unable to startup Timelog Client. Will continue without timelog capabilities", ex);
+    DDLogger.LogException<Program>("Exception when starting up Timelog Client. Will continue without timelog capabilities", ex);
 }
 
 try 

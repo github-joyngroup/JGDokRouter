@@ -190,11 +190,19 @@ namespace Joyn.DokRouter
                     
                     Parallel.ForEach(RunningInstances, runningInstance =>
                     {
-                        PipelineInstancesLocker.TryAdd(runningInstance.Key, new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion));
-                        StartActivity(new StartActivityIn()
+                        try
                         {
-                            PipelineInstanceKey = runningInstance.Key
-                        });
+                            PipelineInstancesLocker.TryAdd(runningInstance.Key, new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion));
+                            StartActivity(new StartActivityIn()
+                            {
+                                PipelineInstanceKey = runningInstance.Key
+                            });
+                        }
+                        catch(Exception ex)
+                        {
+                            //Prevent activities in error to block the engine
+                            DDLogger.LogException<MainEngine>($"Error (re)starting activity for running instance {runningInstance.Key.PipelineInstanceIdentifier}", ex);
+                        }
                     });
                 }
                 else

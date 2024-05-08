@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  jgdokrouterllmdemo:
+    image: jgdokrouterllmdemo:${TAG}
+    container_name: jgdokrouterllmdemo
+    hostname: jgdokrouterllmdemo
+    volumes:
+      - "./volumes/jgdokrouterllmdemo/aspnetKeys:/root/.aspnet/DataProtection-Keys"
+      - "./volumes/jgdokrouterllmdemo/configurations/appsettings.json:/app/appsettings.json"
+      - "./volumes/jgdokrouterllmdemo/logs:/logs"
+      - "./volumes/jgdokrouterllmdemo/files:/files"

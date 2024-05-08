@@ -21,6 +21,9 @@ COPY --from=publish /app/publish .
 RUN mkdir /logs
 RUN chmod 777 /logs
 
+RUN mkdir /files
+RUN chmod 777 /files
+
 ENTRYPOINT ["dotnet", "Joyn.DokRouterLLMDemo.dll"]
 
 #RUN ls -la /src/
