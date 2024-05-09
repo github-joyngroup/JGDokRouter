@@ -98,3 +98,4 @@ env_configs
 Testers/DokRouterClientTester
 Testers/DokRouterServerTester
 Runners/Joyn.DokRouterLLMDemo
+NuGet.config
