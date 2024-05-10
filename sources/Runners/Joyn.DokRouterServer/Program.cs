@@ -47,15 +47,7 @@ try
 
     var timeloggerConfiguration = app.Configuration.GetSection("TimelogClient").Get<Joyn.Timelog.Client.LoggerConfiguration>();
     logger.LogDebug($"LoggerConfiguration:\r\n{(timeloggerConfiguration != null ? System.Text.Json.JsonSerializer.Serialize(timeloggerConfiguration) : "NULL!")}"); 
-    
-    if (!timeloggerConfiguration.Disabled)
-    {
-        Joyn.Timelog.Client.Logger.Startup(Guid.Parse(app.Configuration["ApplicationKey"]), timeloggerConfiguration, logger);
-    }
-    else
-    {
-        DDLogger.LogInfo<Program>("Timelog Client is disabled at config. Will continue without timelog capabilities");
-    }
+    Joyn.Timelog.Client.Logger.Startup(Guid.Parse(app.Configuration["ApplicationKey"]), timeloggerConfiguration, logger);
 }
 catch (Exception ex)
 {
