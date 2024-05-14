@@ -33,6 +33,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouterLLMDemo", "Ru
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Joyn.DokRouterServer", "Runners\Joyn.DokRouterServer\Joyn.DokRouterServer.csproj", "{775B1A97-1813-4788-8363-9EDAFCBF4C9E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Joyn.LLMDriver", "Runners\Joyn.LLMDriver\Joyn.LLMDriver.csproj", "{1C32488E-5603-4567-88F1-15A06F3EE39C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +69,10 @@ Global
 		{775B1A97-1813-4788-8363-9EDAFCBF4C9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{775B1A97-1813-4788-8363-9EDAFCBF4C9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{775B1A97-1813-4788-8363-9EDAFCBF4C9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C32488E-5603-4567-88F1-15A06F3EE39C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C32488E-5603-4567-88F1-15A06F3EE39C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C32488E-5603-4567-88F1-15A06F3EE39C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C32488E-5603-4567-88F1-15A06F3EE39C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -79,6 +85,7 @@ Global
 		{7910C0A4-8FFE-480D-AA4A-29B4408F363C} = {61AE0BF5-68D0-4650-B653-632886305602}
 		{AF4D3502-C2C9-4D39-BE35-B9A9C7AF4443} = {22588772-957E-4FE3-BCBE-59561C5AF831}
 		{775B1A97-1813-4788-8363-9EDAFCBF4C9E} = {22588772-957E-4FE3-BCBE-59561C5AF831}
+		{1C32488E-5603-4567-88F1-15A06F3EE39C} = {22588772-957E-4FE3-BCBE-59561C5AF831}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A47E8118-77E3-44E0-AC47-FD0A66CC41FE}

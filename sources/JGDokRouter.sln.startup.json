@@ -63,6 +63,12 @@
         "Joyn.DokRouterServer": {},
         "Joyn.DokRouterLLMDemo": {}
       }
+    },
+    "DokRouter Server+LLMDriver": {
+      "Projects": {
+        "Joyn.DokRouterServer": {},
+        "Joyn.LLMDriver": {}
+      }
     }
   }
 }
