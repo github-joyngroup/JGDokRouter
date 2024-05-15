@@ -1,5 +1,4 @@
-﻿
-namespace Joyn.DokRouter.Common.Models
+﻿namespace Joyn.DokRouter.Common.Models
 {
     /// <summary>
     /// Identifies an activity being executed by providing the identifier of the corresponding pipeline and the pair of keys that uniquely identifies the activity execution.
@@ -25,7 +24,7 @@ namespace Joyn.DokRouter.Common.Models
         {
             if (obj is ActivityExecutionKey key)
             {
-                return key.PipelineInstanceKey.Equals(this.PipelineInstanceKey) && 
+                return key.PipelineInstanceKey.Equals(this.PipelineInstanceKey) &&
                        key.ActivityDefinitionIdentifier == this.ActivityDefinitionIdentifier &&
                        key.ActivityExecutionIdentifier == this.ActivityExecutionIdentifier;
             }
@@ -52,9 +51,9 @@ namespace Joyn.DokRouter.Common.Models
 
         public static ActivityExecutionKey FromString(string key)
         {
-            var parts = key.Split(new string[] {"|"}, StringSplitOptions.RemoveEmptyEntries);
+            var parts = key.Split(new string[] { "|" }, StringSplitOptions.RemoveEmptyEntries);
 
-            if(parts.Length != 2) { throw new ArgumentException("Invalid key format"); }
+            if (parts.Length != 2) { throw new ArgumentException("Invalid key format"); }
             var configurationHash = parts[0];
             byte[] bytes = Convert.FromBase64String(parts[1]);
 

@@ -16,27 +16,27 @@ namespace Joyn.DokRouterServer.HelperWorkers
             _endActivityCallbackUrl = endActivityCallbackUrl;
         }
 
-        public static async void OnStartActivity(ActivityExecutionDefinition activityExecutionDefinition, StartActivityOut startActivityOutPayload)
+        public static async void OnStartActivity(ActivityDefinition activityDefinition, StartActivityOut startActivityOutPayload)
         {
             //Fill Callback Url
             startActivityOutPayload.CallbackUrl = _endActivityCallbackUrl;
 
-            switch (activityExecutionDefinition.Kind)
+            switch (activityDefinition.Configuration.Kind)
             {
                 case ActivityKind.Direct:
-                    activityExecutionDefinition.DirectActivityHandler(startActivityOutPayload);
+                    activityDefinition.DirectActivityHandler(startActivityOutPayload);
                     break;
 
                 case ActivityKind.HTTP:
                     var jsonContent = System.Text.Json.JsonSerializer.Serialize(startActivityOutPayload);
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-                    var response = await HttpClient.PostAsync(activityExecutionDefinition.Url, content);
+                    var response = await HttpClient.PostAsync(activityDefinition.Url, content);
                     var responseContent = await response.Content.ReadAsStringAsync();
                     "0".ToString();
                     break;
 
                 default:
-                    throw new NotImplementedException($"Activity Kind {activityExecutionDefinition.Kind} unknown or not implemented");
+                    throw new NotImplementedException($"Activity Kind {activityDefinition.Configuration.Kind} unknown or not implemented");
             }
         }
 

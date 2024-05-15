@@ -33,7 +33,8 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add<LogExceptionAttribute>();
 });
 
-builder.Services.AddHostedService<Joyn.DokRouter.EngineMonitor>();
+//TODO: Uncomment when Joyn.DokRouter.EngineMonitor is reimplemented
+//builder.Services.AddHostedService<Joyn.DokRouter.EngineMonitor>();
 
 var app = builder.Build();
 
@@ -62,7 +63,8 @@ try
     var dokRouterDAL = new DokRouterMongoDAL();
 
     Joyn.DokRouter.MainEngine.Startup(dokRouterDAL);
-    Joyn.DokRouter.EngineMonitor.Startup(app.Configuration.GetSection("DokRouterMonitor").Get<Joyn.DokRouter.EngineMonitorConfiguration>(), dokRouterDAL, logger);
+    //TODO: Uncomment when Joyn.DokRouter.EngineMonitor is reimplemented
+    //Joyn.DokRouter.EngineMonitor.Startup(app.Configuration.GetSection("DokRouterMonitor").Get<Joyn.DokRouter.EngineMonitorConfiguration>(), dokRouterDAL, logger);
 }
 catch (Exception ex)
 {

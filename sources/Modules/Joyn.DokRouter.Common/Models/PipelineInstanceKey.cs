@@ -1,6 +1,4 @@
-﻿
-
-namespace Joyn.DokRouter.Common.Models
+﻿namespace Joyn.DokRouter.Common.Models
 {
     /// <summary>
     /// Identifies a running pipeline instance by providing the pair of keys that uniquely identifies a pipeline instance.
@@ -26,8 +24,8 @@ namespace Joyn.DokRouter.Common.Models
         {
             if (obj is PipelineInstanceKey key)
             {
-                return key.ConfigurationHash == this.ConfigurationHash && 
-                       key.PipelineDefinitionIdentifier == this.PipelineDefinitionIdentifier && 
+                return key.ConfigurationHash == this.ConfigurationHash &&
+                       key.PipelineDefinitionIdentifier == this.PipelineDefinitionIdentifier &&
                        key.PipelineInstanceIdentifier == this.PipelineInstanceIdentifier;
             }
             return false;

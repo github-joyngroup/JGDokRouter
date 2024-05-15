@@ -13,37 +13,37 @@ namespace Joyn.DokRouter.DAL
     /// </summary>
     public class MockDokRouterDAL : IDokRouterDAL
     {
-        public DokRouterEngineConfiguration GetLatestEngineConfiguration()
+        public List<ActivityConfiguration> GetActivityConfigurations()
         {
-            return new DokRouterEngineConfiguration();
+            return new List<ActivityConfiguration>();
         }
 
-        public DokRouterEngineConfiguration GetEngineConfigurationByHash(string hash)
+        public ActivityConfiguration GetArchiveActivityConfigurationByHash(string hash)
         {
-            return new DokRouterEngineConfiguration();
+            return new ActivityConfiguration();
         }
 
-        public void SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
+        public PipelineConfiguration GetArchivePipelineConfigurationByHash(string hash)
+        {
+            return new PipelineConfiguration();
+        }
+
+        public CommonConfigurations GetCommonConfigurations()
+        {
+            return new CommonConfigurations();
+        }
+
+        public List<PipelineConfiguration> GetPipelineConfigurations()
+        {
+            return new List<PipelineConfiguration>();
+        }
+
+        public void SaveOrUpdateActivityConfigurationArchive(ActivityConfiguration activityConfiguration)
         {
         }
 
-        public (List<PipelineInstance> result, int lastPage) GetRunningInstances(int pageNumber)
+        public void SaveOrUpdatePipelineConfigurationArchive(PipelineConfiguration activityConfiguration)
         {
-            return (new List<PipelineInstance>(), 1);
-        }
-
-        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
-        {
-        }
-
-        public void FinishPipelineInstance(PipelineInstance pipelineInstance)
-        {
-            
-        }
-
-        public void ErrorPipelineInstance(PipelineInstance pipelineInstance)
-        {
-            
         }
     }
 }

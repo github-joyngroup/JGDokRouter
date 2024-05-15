@@ -47,4 +47,34 @@ namespace Joyn.DokRouter.MongoDAL
         public static string CollectionName => "InstancesErrored";
         public static bool UseTransactions => false;
     }
+
+    public class CommonConfigurationsMapper : BaseMongoMapper
+    {
+        public static string CollectionName => "CommonConfigurations";
+        public static bool UseTransactions => false;
+    }
+
+    public class ActivityConfigurationMapper : BaseMongoMapper
+    {
+        public static string CollectionName => "ActivityConfigurations";
+        public static bool UseTransactions => false;
+    }
+
+    public class ActivityConfigurationArchiveMapper : BaseMongoMapper
+    {
+        public static string CollectionName => "ActivityConfigurationsArchive";
+        public static bool UseTransactions => false;
+    }
+
+    public class PipelineConfigurationMapper : BaseMongoMapper
+    {
+        public static string CollectionName => "PipelineConfigurations";
+        public static bool UseTransactions => false;
+    }
+
+    public class PipelineConfigurationArchiveMapper : BaseMongoMapper
+    {
+        public static string CollectionName => "PipelineConfigurationsArchive";
+        public static bool UseTransactions => false;
+    }
 }

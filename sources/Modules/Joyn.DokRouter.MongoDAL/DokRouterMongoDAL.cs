@@ -14,65 +14,143 @@ namespace Joyn.DokRouter.MongoDAL
     /// </summary>
     public class DokRouterMongoDAL: IDokRouterDAL
     {
-        #region Configuration and respective versioning
+        #region Engine Common Configuration
 
-        public DokRouterEngineConfiguration GetLatestEngineConfiguration()
+        public CommonConfigurations GetCommonConfigurations()
         {
-            return GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationLatestMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            return GenericMongoDAL<CommonConfigurationsForMongo, CommonConfigurationsMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
             {
-                Page = 1, PageSize = 1
-            }).ResultSet.FirstOrDefault()?.DokRouterEngineConfiguration;
-        }
-
-        public DokRouterEngineConfiguration GetEngineConfigurationByHash(string hash)
-        {
-            return GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationArchiveMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
-            {
-                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
-                {
-                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(DokRouterEngineConfigurationForMongoProperties.Hash, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, hash)
-                },
                 Page = 1,
-                PageSize = 1,
-            }).ResultSet.FirstOrDefault()?.DokRouterEngineConfiguration;
-        }
-
-        public void SaveOrUpdateEngineConfiguration(DokRouterEngineConfiguration engineConfiguration)
-        {
-            GenericMongoDAL<DokRouterEngineConfigurationForMongo, DokRouterEngineConfigurationArchiveMapper>.UpdateObject(new DokRouterEngineConfigurationForMongo(engineConfiguration));
+                PageSize = 1
+            }).ResultSet.FirstOrDefault()?.CommonConfigurations;
         }
 
         #endregion
 
-        #region Pipeline Instances and execution methods
+        #region Activity Configuration and respective versioning
 
-        public (List<PipelineInstance> result, int lastPage) GetRunningInstances(int pageNumber)
+        public List<ActivityConfiguration> GetActivityConfigurations()
         {
-            var baseResult = GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            //Load Activity configurations from DB 
+            //As, by design, we cannot obtain all data on a single call, we will iterate through the pages until we get all data
+            //However, this may cause a problem if we have many activity configurations, as we will be loading all of them in memory
+            //Should a limit be imposed? And we would only load up to a limit? If so, we might need to change the way we load the activity configurations, maybe load the pipelines first and then only load the required activities?
+            //However, as we expect to have a limited number of activities ( < 1000), this might suffice for now
+
+            var firstPageResultX = GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
             {
-                Page = pageNumber
             });
 
-            return (baseResult.ResultSet.Select(r => r.PipelineInstance).ToList(), baseResult.LastPage);
+            var firstPageResult = GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Page = 1,
+                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                {
+                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(ActivityConfigurationForMongoProperties.Disabled, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, false)
+                }
+            });
+
+            var allPagesTasks = Enumerable.Range(2, firstPageResult.LastPage).Select(pageNumber =>
+            {
+                return Task.Run(() =>
+                {
+                    return GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+                    {
+                        Page = pageNumber,
+                        Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                        {
+                            new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(ActivityConfigurationForMongoProperties.Disabled, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, false)
+                        }
+                    });
+                });
+            }).ToArray();
+
+            Task.WaitAll(allPagesTasks);
+            List<ActivityConfiguration> baseActivityConfigurations = new List<ActivityConfiguration>();
+            baseActivityConfigurations.AddRange(firstPageResult.ResultSet.Select(r => r.ActivityConfiguration));
+            baseActivityConfigurations.AddRange(allPagesTasks.SelectMany(t => t.Result.ResultSet.Select(r => r.ActivityConfiguration)));
+
+            return baseActivityConfigurations;
         }
 
-        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
+        public ActivityConfiguration GetArchiveActivityConfigurationByHash(string hash)
         {
-            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+            return GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationArchiveMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                {
+                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(ActivityConfigurationForMongoProperties.Hash, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, hash)
+                },
+                Page = 1,
+                PageSize = 1,
+            }).ResultSet.FirstOrDefault()?.ActivityConfiguration;
         }
 
-        public void FinishPipelineInstance(PipelineInstance pipelineInstance)
+        public void SaveOrUpdateActivityConfigurationArchive(ActivityConfiguration activityConfiguration)
         {
-            //TODO: Should be executed within a transaction
-            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceFinishedMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance)); 
-            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
+            GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationArchiveMapper>.UpdateObject(new ActivityConfigurationForMongo(activityConfiguration));
         }
 
-        public void ErrorPipelineInstance(PipelineInstance pipelineInstance)
+        #endregion
+
+        #region Pipeline Configuration and respective versioning
+
+        public List<PipelineConfiguration> GetPipelineConfigurations()
         {
-            //TODO: Should be executed within a transaction
-            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceErroredMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
-            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
+            //Load pipeline configurations from DB 
+            //As, by design, we cannot obtain all data on a single call, we will iterate through the pages until we get all data
+            //However, this may cause a problem if we have many pipeline configurations, as we will be loading all of them in memory
+            //Should a limit be imposed? And we would only load up to a limit? If so, we might need to change the way we load the pipeline configurations, maybe load the pipelines on demand whenever they are needed?
+            //However, as we expect to have a limited number of pipeline configurations ( < 100), this might suffice for now
+
+            var firstPageResult = GenericMongoDAL<PipelineConfigurationForMongo, PipelineConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Page = 1,
+                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                {
+                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(PipelineConfigurationForMongoProperties.Disabled, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, false)
+                }
+            });
+
+            var allPagesTasks = Enumerable.Range(2, firstPageResult.LastPage).Select(pageNumber =>
+            {
+                return Task.Run(() =>
+                {
+                    return GenericMongoDAL<PipelineConfigurationForMongo, PipelineConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+                    {
+                        Page = pageNumber,
+                        Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                        {
+                            new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(PipelineConfigurationForMongoProperties.Disabled, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, false)
+                        }
+                    });
+                });
+            }).ToArray();
+
+            Task.WaitAll(allPagesTasks);
+            List<PipelineConfiguration> basePipelineConfigurations = new List<PipelineConfiguration>();
+            basePipelineConfigurations.AddRange(firstPageResult.ResultSet.Select(r => r.PipelineConfiguration));
+            basePipelineConfigurations.AddRange(allPagesTasks.SelectMany(t => t.Result.ResultSet.Select(r => r.PipelineConfiguration)));
+
+            return basePipelineConfigurations;
+        }
+
+        public PipelineConfiguration GetArchivePipelineConfigurationByHash(string hash)
+        {
+            return GenericMongoDAL<PipelineConfigurationForMongo, PipelineConfigurationArchiveMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Properties = new List<DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties>()
+                {
+                    new DocDigitizer.Common.DAL.EntityTable.EntitySearchProperties(PipelineConfigurationForMongoProperties.Hash, DocDigitizer.Common.DAL.EntityTable.EntitySearchPropertiesOperator.Equal, hash)
+                },
+                Page = 1,
+                PageSize = 1,
+            }).ResultSet.FirstOrDefault()?.PipelineConfiguration;
+        }
+
+        public void SaveOrUpdatePipelineConfigurationArchive(PipelineConfiguration pipelineConfiguration)
+        {
+            GenericMongoDAL<PipelineConfigurationForMongo, PipelineConfigurationArchiveMapper>.UpdateObject(new PipelineConfigurationForMongo(pipelineConfiguration));
         }
 
         #endregion

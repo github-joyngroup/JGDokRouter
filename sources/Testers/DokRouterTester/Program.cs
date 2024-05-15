@@ -27,14 +27,6 @@ builder.ConfigureServices((hostContext, services) =>
         logging.AddConsole();
         logging.AddFile(options => { hostContext.Configuration.GetSection("Logging:File").Bind(options); }); //Requires nuget NetEscapades.Extensions.Logging.RollingFile
     });
-
-    services.AddSingleton<DokRouterEngineConfiguration>((options) =>
-    {
-        var dokRouterEngineConfiguration = new DokRouterEngineConfiguration();
-        hostContext.Configuration.GetSection("DokRouter").Bind(dokRouterEngineConfiguration);
-        return dokRouterEngineConfiguration;
-    });
-
 });
 
 var host = builder.Build();

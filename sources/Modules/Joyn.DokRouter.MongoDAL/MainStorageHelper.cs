@@ -20,8 +20,8 @@ namespace Joyn.DokRouter.MongoDAL
             //MongoDB.Bson.BsonSerializationException: 'An error occurred while serializing the PipelineInstance property of class : An error occurred while serializing the  property of class : When using DictionaryRepresentation.Document key values must serialize as strings.'
             //BsonSerializer.RegisterSerializer<ActivityExecutionKey>(new ActivityExecutionKeySerializer());
             //BsonSerializer.RegisterSerializer(typeof(int), new IntToStringBsonSerializer());
-            BsonSerializer.RegisterSerializer<Dictionary<int, Dictionary<Guid, ActivityInstance>>>(new ActivityInstancesDoubleDictionarySerializer());
-            BsonSerializer.RegisterSerializer<Dictionary<int, ActivityInstance>>(new ActivityInstancesSingleDictionarySerializer());
+            //BsonSerializer.RegisterSerializer<Dictionary<int, Dictionary<Guid, ActivityInstance>>>(new ActivityInstancesDoubleDictionarySerializer());
+            //BsonSerializer.RegisterSerializer<Dictionary<int, ActivityInstance>>(new ActivityInstancesSingleDictionarySerializer());
             BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
             //Epocas, 27/03/2020 > this allows POCO classes to have less fields than those existing in the Mongo database
