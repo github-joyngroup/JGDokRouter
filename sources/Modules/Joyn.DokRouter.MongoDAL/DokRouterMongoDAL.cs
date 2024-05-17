@@ -37,10 +37,6 @@ namespace Joyn.DokRouter.MongoDAL
             //Should a limit be imposed? And we would only load up to a limit? If so, we might need to change the way we load the activity configurations, maybe load the pipelines first and then only load the required activities?
             //However, as we expect to have a limited number of activities ( < 1000), this might suffice for now
 
-            var firstPageResultX = GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
-            {
-            });
-
             var firstPageResult = GenericMongoDAL<ActivityConfigurationForMongo, ActivityConfigurationMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
             {
                 Page = 1,
@@ -153,6 +149,61 @@ namespace Joyn.DokRouter.MongoDAL
             GenericMongoDAL<PipelineConfigurationForMongo, PipelineConfigurationArchiveMapper>.UpdateObject(new PipelineConfigurationForMongo(pipelineConfiguration));
         }
 
+        #endregion
+
+        #region Pipeline Instances and execution methods
+
+        public List<PipelineInstance> GetRunningInstances()
+        {
+            //Load Pipeline Instances from DB 
+            //As, by design, we cannot obtain all data on a single call, we will iterate through the pages until we get all data
+            //However, this may cause a problem if we have many pipeline instances, as we will be loading all of them in memory
+            //Should a limit be imposed? And we would only load up to a limit? If so, we might need to change the way we load the running pipelines, maybe load up to a point and when those are finished, load the next ones?
+            //However, as we expect to have a limited number of parallel pipelines ( < 1000), this might suffice for now
+
+            var firstPageResult = GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+            {
+                Page = 1,
+            });
+
+            var allPagesTasks = Enumerable.Range(2, firstPageResult.LastPage).Select(pageNumber =>
+            {
+                return Task.Run(() =>
+                {
+                    return GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.SearchManyPaginated(new DocDigitizer.Common.DAL.EntityTable.EntitySearch()
+                    {
+                        Page = pageNumber,
+                    });
+                });
+            }).ToArray();
+
+            Task.WaitAll(allPagesTasks);
+            List<PipelineInstance> basePipelineInstances = new List<PipelineInstance>();
+            basePipelineInstances.AddRange(firstPageResult.ResultSet.Select(r => r.PipelineInstance));
+            basePipelineInstances.AddRange(allPagesTasks.SelectMany(t => t.Result.ResultSet.Select(r => r.PipelineInstance)));
+
+            return basePipelineInstances;
+
+        }
+
+        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance)
+        {
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+        }
+
+        public void FinishPipelineInstance(PipelineInstance pipelineInstance)
+        {
+            //TODO: Should be executed within a transaction
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceFinishedMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
+        }
+
+        public void ErrorPipelineInstance(PipelineInstance pipelineInstance)
+        {
+            //TODO: Should be executed within a transaction
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceErroredMapper>.UpdateObject(new PipelineInstanceForMongo(pipelineInstance));
+            GenericMongoDAL<PipelineInstanceForMongo, PipelineInstanceRunningMapper>.DeleteObject(pipelineInstance.Key.PipelineInstanceIdentifier.ToString("N"));
+        }
         #endregion
     }
 }

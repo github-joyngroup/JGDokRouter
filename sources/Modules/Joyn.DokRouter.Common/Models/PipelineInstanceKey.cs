@@ -8,7 +8,7 @@
         /// <summary>
         /// The configuration hash used to create this pipeline instance.
         /// </summary>
-        public string ConfigurationHash { get; set; }
+        public string PipelineConfigurationHash { get; set; }
 
         /// <summary>
         /// The identifier of the pipeline definition that this instance is based on.
@@ -24,7 +24,7 @@
         {
             if (obj is PipelineInstanceKey key)
             {
-                return key.ConfigurationHash == this.ConfigurationHash &&
+                return key.PipelineConfigurationHash == this.PipelineConfigurationHash &&
                        key.PipelineDefinitionIdentifier == this.PipelineDefinitionIdentifier &&
                        key.PipelineInstanceIdentifier == this.PipelineInstanceIdentifier;
             }
@@ -33,7 +33,7 @@
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(ConfigurationHash, PipelineDefinitionIdentifier, PipelineInstanceIdentifier);
+            return HashCode.Combine(PipelineConfigurationHash, PipelineDefinitionIdentifier, PipelineInstanceIdentifier);
         }
     }
 }

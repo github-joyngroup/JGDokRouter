@@ -11,6 +11,7 @@ using Joyn.DokRouter.Common.Models;
 using Joyn.DokRouter.Common.Payloads;
 using Joyn.DokRouter.Common.DAL;
 using Joyn.DokRouter.DAL;
+using Google.Protobuf.WellKnownTypes;
 
 var builder = Host.CreateDefaultBuilder(args);
 
@@ -36,7 +37,8 @@ var logger = host.Services.GetRequiredService<ILogger<MainTestAPI>>();
 DDLogger.Startup(logger);
 try
 {
-    Joyn.DokRouter.MainEngine.Startup(new MockDokRouterDAL());
+    //Check if  host.Services.GetService<IConfiguration>()["EndActivityCallbackUrl"]) works
+    Joyn.DokRouter.MainEngine.Startup(new MockDokRouterDAL(), host.Services.GetService<IConfiguration>()["EndActivityCallbackUrl"]);
 }
 catch (Exception ex)
 {

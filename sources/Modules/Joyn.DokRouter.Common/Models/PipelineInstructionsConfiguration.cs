@@ -14,6 +14,9 @@ namespace Joyn.DokRouter.Common.Models
         /// <summary>Kind of instruction to execute</summary>
         public PipelineInstructionKind Kind { get; set; }
 
+        /// <summary>Kind of instruction to execute - In human Readable text</summary>
+        public string KindText { get; set; }
+
         /// <summary>
         /// Expression that will be evaluated, if it returns false the instruction will be skipped
         /// </summary>
@@ -21,15 +24,21 @@ namespace Joyn.DokRouter.Common.Models
 
         /// <summary>
         /// For Kind = Activity, the activity identifiers to execute
-        /// For Kind = Repeat, the activity identifiers to execute within the cycle
+        /// For Kind = Cycle, the activity identifiers to execute within the cycle
         /// </summary>
         public List<Guid> ActivityIdentifiers { get; set; }
 
-        /// <summary>For Kind = Repeat, the expression that after evaluated will give the number of times to repeat the activity</summary>
-        public string RepeatExpression { get; set; }
+        /// <summary>For Kind = Cycle, the number of cycles to execute.
+        /// Can be an direct number or a map to a variable that should exist in the pipeline instance InstanceData object
+        /// In the second case, the format is {InstanceData.variable name>}
+        /// </summary>
+        public string NumberCyclesExpression { get; set; }
 
-        /// <summary>For Kind = Repeat, the expression that will be evaluated between each execution that will allow the cycle to be stopped</summary>
-        public string RepeatBreakExpression { get; set; }
+        /// <summary>For Kind = Cycle, the expression that will be evaluated to obtain a maximum number of cycles if we want to limit them
+        /// Can be an direct number or a map to a variable that should exist in the pipeline instance InstanceData object
+        /// In the second case, the format is {InstanceData.variable name>}
+        /// </summary>
+        public string MaxNumberCyclesExpression { get; set; }
 
         /// <summary>For Kind = GoTo, the order number of the instruction to jump to</summary>
         public int GoToOrderNumber { get; set; }
@@ -46,9 +55,9 @@ namespace Joyn.DokRouter.Common.Models
         Activity = 10,
 
         /// <summary>
-        /// Repeats a number of times the execution of an activity or list of activities
+        /// Repeat a number of times the execution of an activity or list of activities
         /// </summary>
-        Repeat = 20,
+        Cycle = 20,
 
         /// <summary>
         /// Goes to a specific instruction in the pipeline

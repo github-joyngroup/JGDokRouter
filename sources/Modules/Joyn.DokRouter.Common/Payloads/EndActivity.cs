@@ -27,5 +27,7 @@ namespace Joyn.DokRouter.Common.Payloads
         /// If null, no changes shall be made in the pipeline instance
         /// </summary>
         public byte[]? MarshalledExternalData { get; set; }
+
+        public Dictionary<string, string> ProcessInstanceData { get; set; }
     }
 }

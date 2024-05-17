@@ -59,5 +59,49 @@ namespace Joyn.DokRouterServer.HelperWorkers
             var response = await HttpClient.PostAsync(startActivityPayload.CallbackUrl, content);
             var responseContent = await response.Content.ReadAsStringAsync();
         }
+
+        public static async void SetupCycleActivity(StartActivityOut startActivityPayload)
+        {
+            Console.WriteLine("Executing SetupCycle activity");
+            Thread.Sleep(Random.Shared.Next(2000, 5000));
+            Console.WriteLine("Finished SetupCycle execution");
+
+            EndActivity endActivityPayload = new EndActivity()
+            {
+                ActivityExecutionKey = startActivityPayload.ActivityExecutionKey,
+                IsSuccess = true,
+                ProcessInstanceData = new Dictionary<string, string>()
+                {
+                    { "numberCycles", Random.Shared.Next(1, 10).ToString() }
+                }
+            };
+            var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            //Callback after finishing
+            Console.WriteLine($"Invoking {startActivityPayload.CallbackUrl} to flag end activity");
+            var response = await HttpClient.PostAsync(startActivityPayload.CallbackUrl, content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+        }
+
+        public static async void ExecuteCycleActivity(StartActivityOut startActivityPayload)
+        {
+            Console.WriteLine($"Executing Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
+            Thread.Sleep(Random.Shared.Next(2000, 5000));
+            Console.WriteLine("Finished Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
+
+            EndActivity endActivityPayload = new EndActivity()
+            {
+                ActivityExecutionKey = startActivityPayload.ActivityExecutionKey,
+                IsSuccess = true
+            };
+            var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            //Callback after finishing
+            Console.WriteLine($"Invoking {startActivityPayload.CallbackUrl} to flag end activity");
+            var response = await HttpClient.PostAsync(startActivityPayload.CallbackUrl, content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+        }
     }
 }

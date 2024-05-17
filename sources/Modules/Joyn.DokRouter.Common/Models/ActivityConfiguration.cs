@@ -47,6 +47,9 @@ namespace Joyn.DokRouter.Common.Models
         /// </summary>
         public ActivityKind Kind { get; set; }
 
+        /// <summary>Kind of activity to execute - In human Readable text</summary>
+        public string KindText { get; set; }
+
         /// <summary>
         /// For Kind = Direct, the assembly that contains the class that contains the method that will be executed when the activity is to be executed
         /// </summary>

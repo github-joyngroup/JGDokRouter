@@ -62,7 +62,7 @@ try
 
     var dokRouterDAL = new DokRouterMongoDAL();
 
-    Joyn.DokRouter.MainEngine.Startup(dokRouterDAL);
+    Joyn.DokRouter.MainEngine.Startup(dokRouterDAL, app.Configuration["EndActivityCallbackUrl"]);
     //TODO: Uncomment when Joyn.DokRouter.EngineMonitor is reimplemented
     //Joyn.DokRouter.EngineMonitor.Startup(app.Configuration.GetSection("DokRouterMonitor").Get<Joyn.DokRouter.EngineMonitorConfiguration>(), dokRouterDAL, logger);
 }

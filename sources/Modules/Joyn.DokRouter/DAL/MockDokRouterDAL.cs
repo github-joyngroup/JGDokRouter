@@ -38,12 +38,16 @@ namespace Joyn.DokRouter.DAL
             return new List<PipelineConfiguration>();
         }
 
-        public void SaveOrUpdateActivityConfigurationArchive(ActivityConfiguration activityConfiguration)
-        {
-        }
+        public void SaveOrUpdateActivityConfigurationArchive(ActivityConfiguration activityConfiguration) { }
 
-        public void SaveOrUpdatePipelineConfigurationArchive(PipelineConfiguration activityConfiguration)
-        {
-        }
+        public void SaveOrUpdatePipelineConfigurationArchive(PipelineConfiguration activityConfiguration) { }
+
+        public List<PipelineInstance> GetRunningInstances() { return new List<PipelineInstance>(); }
+
+        public void SaveOrUpdatePipelineInstance(PipelineInstance pipelineInstance) { }
+
+        public void FinishPipelineInstance(PipelineInstance pipelineInstance) { }
+
+        public void ErrorPipelineInstance(PipelineInstance pipelineInstance) { }
     }
 }
