@@ -64,7 +64,8 @@ namespace Joyn.DokRouterServer.HelperWorkers
         {
             Console.WriteLine("Executing SetupCycle activity");
             Thread.Sleep(Random.Shared.Next(2000, 5000));
-            Console.WriteLine("Finished SetupCycle execution");
+            var numberCycles = Random.Shared.Next(4, 20);
+            Console.WriteLine($"Finished SetupCycle execution - will ask for {numberCycles} cycles");
 
             EndActivity endActivityPayload = new EndActivity()
             {
@@ -72,7 +73,7 @@ namespace Joyn.DokRouterServer.HelperWorkers
                 IsSuccess = true,
                 ProcessInstanceData = new Dictionary<string, string>()
                 {
-                    { "numberCycles", Random.Shared.Next(1, 10).ToString() }
+                    { "numberCycles", numberCycles.ToString() }
                 }
             };
             var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
@@ -88,7 +89,7 @@ namespace Joyn.DokRouterServer.HelperWorkers
         {
             Console.WriteLine($"Executing Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
             Thread.Sleep(Random.Shared.Next(2000, 5000));
-            Console.WriteLine("Finished Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
+            Console.WriteLine($"Finished Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
 
             EndActivity endActivityPayload = new EndActivity()
             {

@@ -18,7 +18,11 @@ namespace Joyn.DokRouter
     /// </summary>
     public class MainEngine
     {
+        //TODO: MOVE TO CONFIGURATION
+        private const int EngineDefaulMaxNumberCycles = 5;
+
         private static readonly object dokRouterEngineConfigurationLocker = new object();
+        
 
         /// <summary>
         /// The default pipeline identifier to be used when no pipeline is specified
@@ -525,7 +529,11 @@ namespace Joyn.DokRouter
                         //First activity of the instruction, create the instruction instance
                         pipelineInstance.InstructionInstances.Add(pipelineInstance.InstructionPointer, new InstructionInstance()
                         {
-                            ActivityInstances = new Dictionary<Guid, ActivityInstance>()
+                            ActivityInstances = new Dictionary<int, Dictionary<Guid, ActivityInstance>>(),
+                            CurrentActivityIndex = 0,
+                            CurrentCycleCounter = 0,
+                            NumberCycles = Math.Min(EvaluateExpressionToInteger(nextInstructionConfiguration.NumberCyclesExpression, pipelineInstance.InstanceData, 1), 
+                                                    EvaluateExpressionToInteger(nextInstructionConfiguration.MaxNumberCyclesExpression, pipelineInstance.InstanceData, EngineDefaulMaxNumberCycles))
                         });
                     }
 
@@ -533,27 +541,55 @@ namespace Joyn.DokRouter
                     var instructionInstance = pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer];
                     switch (nextInstructionConfiguration.Kind)
                     {
+                        //TODO: Check execution condition as we might want to prevent an instruction to be executed based on some expression condition
+
                         //Direct activity execution, just one activity to be executed, so we just need to check if it was already executed
                         case PipelineInstructionKind.Activity:
-                            foreach (var activityIdentifier in nextInstructionConfiguration.ActivityIdentifiers)
+                        case PipelineInstructionKind.Cycle:
+                            var currentActivityIndex = instructionInstance.CurrentActivityIndex;
+                            var currentCycleIndex = instructionInstance.CurrentCycleCounter;
+
+                            if (!instructionInstance.ActivityInstances.ContainsKey(currentCycleIndex)) { instructionInstance.ActivityInstances.Add(currentCycleIndex, new Dictionary<Guid, ActivityInstance>()); }
+
+                            while (nextActivityIdentifier == Guid.Empty)
                             {
-                                if (!instructionInstance.ActivityInstances.ContainsKey(activityIdentifier))
+                                if (currentActivityIndex >= nextInstructionConfiguration.ActivityIdentifiers.Count)
+                                {
+                                    //Reached the end of the activities, move to next cycle
+                                    currentActivityIndex = 0;
+                                    currentCycleIndex++;
+                                    //Notice that when activity Kind is Activity instructionInstance.NumberCycles shall be 1
+                                    if (currentCycleIndex >= instructionInstance.NumberCycles)
+                                    {
+                                        //Reached the end of the cycles, move to next instruction
+                                        break;
+                                    }
+                                    
+                                    if (!instructionInstance.ActivityInstances.ContainsKey(currentCycleIndex)) { instructionInstance.ActivityInstances.Add(currentCycleIndex, new Dictionary<Guid, ActivityInstance>()); }
+                                }
+
+                                var currentActivityIdentifier = nextInstructionConfiguration.ActivityIdentifiers[currentActivityIndex];
+
+                                if (!instructionInstance.ActivityInstances[currentCycleIndex].ContainsKey(currentActivityIdentifier))
                                 {
                                     //This is the next activity to be executed
-                                    nextActivityIdentifier = activityIdentifier;
+                                    nextActivityIdentifier = currentActivityIdentifier;
                                     break;
                                 }
-                                if (!instructionInstance.ActivityInstances[activityIdentifier].EndedAt.HasValue)
+
+                                if (!instructionInstance.ActivityInstances[currentCycleIndex][currentActivityIdentifier].EndedAt.HasValue)
                                 {
                                     //This activity did not finish, it will be retried
-                                    nextActivityIdentifier = activityIdentifier;
+                                    nextActivityIdentifier = currentActivityIdentifier;
                                     break;
                                 }
-                            }
-                            break;
 
-                        //case PipelineInstructionKind.Cycle:
-                        //    break;
+                                currentActivityIndex++;
+                            }
+
+                            instructionInstance.CurrentActivityIndex = currentActivityIndex;
+                            instructionInstance.CurrentCycleCounter = currentCycleIndex;
+                            break;
 
                         //case PipelineInstructionKind.GoTo:
                         //    break;
@@ -582,9 +618,9 @@ namespace Joyn.DokRouter
                         DDLogger.LogWarn<MainEngine>($"Cannot start activity with identifier {nextActivityIdentifier} that would be the next one within pipeline {pipelineInstance.Name} ({pipelineInstance.Key.PipelineDefinitionIdentifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} - Activity not found in the pool. Will skip this activity and proceed");
 
                         //Init Activity Instance if first
-                        if (!pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances.ContainsKey(nextActivityIdentifier))
+                        if (!pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances.ContainsKey(nextActivityIdentifier))
                         {
-                            pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances.Add(nextActivityIdentifier, new ActivityInstance()
+                            pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances.Add(nextActivityIdentifier, new ActivityInstance()
                             {
                                 ActivityConfigurationHash = "N/A",
                                 Name = "N/A",
@@ -622,9 +658,9 @@ namespace Joyn.DokRouter
                 DDLogger.LogDebug<MainEngine>($"Starting activity {activityDefinition.Configuration.Name} ({activityDefinition.Configuration.Identifier}) in Pipeline {pipelineInstance.Name} ({pipelineInstance.Key.PipelineDefinitionIdentifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
                 //Init Activity Instance if first
-                if (!pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances.ContainsKey(nextActivityIdentifier))
+                if (!pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances.ContainsKey(nextActivityIdentifier))
                 {
-                    pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances.Add(nextActivityIdentifier, new ActivityInstance()
+                    pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances.Add(nextActivityIdentifier, new ActivityInstance()
                     {
                         ActivityConfigurationHash = activityDefinition.Configuration.Hash,
                         Name = activityDefinition.Configuration.Name,
@@ -635,12 +671,12 @@ namespace Joyn.DokRouter
                 }
 
                 //Check previous executions of the activity that have not ended - This might need to be revisited if we want parallel activity executions
-                if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances[nextActivityIdentifier].Executions.Any())
+                if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions.Any())
                 {
                     //Not first execution of activity, meaning we are doing some retry, aditional actions are needed
 
                     //All previous activity executions should be flagged as errored
-                    foreach (var activityExecution in pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances[nextActivityIdentifier].Executions)
+                    foreach (var activityExecution in pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions)
                     {
                         if (!activityExecution.EndedAt.HasValue)
                         {
@@ -651,7 +687,7 @@ namespace Joyn.DokRouter
                     }
 
                     //Check if there are any retries available
-                    if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances[nextActivityIdentifier].Executions.Count >= activityDefinition.CommonConfigurations.RetryOnSLAExpiredMaxRetries + 1)
+                    if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions.Count >= activityDefinition.CommonConfigurations.RetryOnSLAExpiredMaxRetries + 1)
                     {
                         //No more executions! Do not start the activity, terminate the pipeline instead
                         DDLogger.LogError<MainEngine>($"activity {activityDefinition.Configuration.Name} ({activityDefinition.Configuration.Identifier}) in Pipeline {pipelineDefinition.Configuration.Name} ({pipelineDefinition.Configuration.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier} reached limit of retries. Pipeline will be errored");
@@ -675,10 +711,11 @@ namespace Joyn.DokRouter
                     PipelineInstanceKey = pipelineInstance.Key,
                     ActivityConfigurationHash = activityDefinition.Configuration.Hash,
                     ActivityDefinitionIdentifier = activityDefinition.Configuration.Identifier,
-                    ActivityExecutionIdentifier = Guid.NewGuid()
+                    ActivityExecutionIdentifier = Guid.NewGuid(),
+                    CycleCounter = pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleCounter,
                 };
 
-                pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances[nextActivityIdentifier].Executions.Add(new ActivityExecution()
+                pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions.Add(new ActivityExecution()
                 {
                     Key = activityExecutionKey,
                     StartedAt = DateTime.UtcNow,
@@ -691,7 +728,8 @@ namespace Joyn.DokRouter
                     ActivityStarter.OnStartActivity(activityDefinition, new StartActivityOut()
                     {
                         ActivityExecutionKey = activityExecutionKey,
-                        MarshalledExternalData = pipelineInstance.MarshalledExternalData
+                        MarshalledExternalData = pipelineInstance.MarshalledExternalData,
+
                     });
                 });
 
@@ -801,9 +839,9 @@ namespace Joyn.DokRouter
                 }
 
                 var activityExecutionKey = endActivityPayload.ActivityExecutionKey;
-                if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances.ContainsKey(activityExecutionKey.ActivityDefinitionIdentifier))
+                if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances.ContainsKey(activityExecutionKey.ActivityDefinitionIdentifier))
                 {
-                    var activityInstance = pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].ActivityInstances[activityExecutionKey.ActivityDefinitionIdentifier];
+                    var activityInstance = pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[activityExecutionKey.ActivityDefinitionIdentifier];
                     var activityExecution = activityInstance.Executions.FirstOrDefault(e => e.Key.Equals(activityExecutionKey));
 
                     if (activityExecution == null)
@@ -865,6 +903,41 @@ namespace Joyn.DokRouter
             {
                 locker.ExitWriteLock();
             }
+        }
+
+        /// <summary>
+        /// This will evaluate a pipeline expression and return the int value that corresponds to the parsed value
+        /// TODO: This can be moved to some common expression evaluator or metaprogramming module
+        /// </summary>
+        /// <returns></returns>
+        public static int EvaluateExpressionToInteger(string initialExpression, Dictionary<string, string> supportData, int defaultValue)
+        {
+            if (String.IsNullOrEmpty(initialExpression)) { return defaultValue; }
+
+            //Replace all {keys} with the respective value from the support data dictionary
+            string expression = initialExpression;
+            while (expression.Contains("{") && expression.Contains("}"))
+            {
+                var keyStart = expression.IndexOf("{");
+                var keyEnd = expression.IndexOf("}");
+                if(keyStart < keyEnd)
+                {
+                    var key = expression.Substring(keyStart + 1, keyEnd - keyStart - 1);
+                    if(supportData.ContainsKey(key))
+                    {
+                        expression = expression.Replace($"{{{key}}}", supportData[key]);
+                    }
+                    else
+                    {
+                        expression = expression.Replace($"{{{key}}}", "");
+                    }
+                }
+            }
+
+            if (int.TryParse(expression, out var result)) { DDLogger.LogDebug<MainEngine>($"Evaluate Expression '{expression}' from initial expression '{initialExpression}' will return: '{result}'"); return result; }
+
+            DDLogger.LogDebug<MainEngine>($"Evaluate Expression '{expression}' from initial expression '{initialExpression}' will return default value of: '{default}'");
+            return defaultValue;
         }
     }
 }

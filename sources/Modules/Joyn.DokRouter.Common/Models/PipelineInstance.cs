@@ -79,9 +79,34 @@ namespace Joyn.DokRouter.Common.Models
     public class InstructionInstance
     {
         /// <summary>
-        /// Keeps track of the activity instances that are being executed by this instruction
+        /// For Instruction Kind = Activity, Keeps track of the current index of the activity within the List of activities of the configuration
+        /// For Instruction Kind = Cycle, Keeps track of the current index of the activity within the List of activities of the configuration
         /// </summary>
-        public Dictionary<Guid, ActivityInstance> ActivityInstances { get; set; }
+        public int CurrentActivityIndex { get; set; }
+
+        /// <summary>
+        /// For Instruction Kind = Cycle, Keeps track of the current index of the cycle
+        /// For Instruction Kind = Activity, will always be zero
+        /// </summary>
+        public int CurrentCycleCounter { get; set; }
+
+        /// <summary>
+        /// For Instruction Kind = Cycle, will hold the total number of times the cycle is to be executed, this is calculated by the engine when the instruction is started by evaluating the respective configuration
+        /// For Instruction Kind = Activity, will always be one
+        /// </summary>
+        public int NumberCycles { get; set; }
+
+        public Dictionary<Guid, ActivityInstance> CurrentCycleActivityInstances
+        {
+            get { return ActivityInstances[CurrentCycleCounter]; }
+        }
+
+        /// <summary>
+        /// Keeps track of the activity instances that are being executed by this instruction
+        /// The first key is the cycle number, when the instruction is not a cycle, the key will be 0
+        /// The second key is the identifier of the activity definition
+        /// </summary>
+        public Dictionary<int, Dictionary<Guid, ActivityInstance>> ActivityInstances { get; set; }
     }
 
     /// <summary>

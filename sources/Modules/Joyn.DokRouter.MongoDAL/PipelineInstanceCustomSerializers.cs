@@ -56,35 +56,51 @@ namespace Joyn.DokRouter.MongoDAL
         }
     }
 
-    public class ActivityInstancesFromGuidDictionarySerializer : IBsonSerializer<Dictionary<Guid, ActivityInstance>>
+    public class ActivityInstancesDoubleDictionarySerializer : IBsonSerializer<Dictionary<int, Dictionary<Guid, ActivityInstance>>>
     {
-        public Type ValueType => typeof(Dictionary<Guid, ActivityInstance>);
+        public Type ValueType => typeof(Dictionary<int, Dictionary<Guid, ActivityInstance>>);
 
         // Type-specific Serialize method
-        public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Dictionary<Guid, ActivityInstance> value)
+        public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Dictionary<int, Dictionary<Guid, ActivityInstance>> value)
         {
             var writer = context.Writer;
             writer.WriteStartDocument();
             foreach (var outerKvp in value)
             {
                 writer.WriteName(outerKvp.Key.ToString());
-                BsonSerializer.Serialize(writer, outerKvp.Value);
+                writer.WriteStartDocument();
+                foreach (var innerKvp in outerKvp.Value)
+                {
+                    writer.WriteName(innerKvp.Key.ToString());
+                    BsonSerializer.Serialize(writer, innerKvp.Value);
+                }
+                writer.WriteEndDocument();
             }
             writer.WriteEndDocument();
         }
 
         // Implement general object deserialization method required by IBsonSerializer
-        public Dictionary<Guid, ActivityInstance> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
+        public Dictionary<int, Dictionary<Guid, ActivityInstance>> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
         {
-            var result = new Dictionary<Guid, ActivityInstance>();
+            var result = new Dictionary<int, Dictionary<Guid, ActivityInstance>>();
             var reader = context.Reader;
 
             reader.ReadStartDocument();
             while (reader.ReadBsonType() != BsonType.EndOfDocument)
             {
-                var key = Guid.Parse(reader.ReadName());
-                var value = BsonSerializer.Deserialize<ActivityInstance>(reader);
-                result.Add(key, value);
+                var key = int.Parse(reader.ReadName());
+                var innerDict = new Dictionary<Guid, ActivityInstance>();
+
+                reader.ReadStartDocument();
+                while (reader.ReadBsonType() != BsonType.EndOfDocument)
+                {
+                    var innerKey = Guid.Parse(reader.ReadName());
+                    var value = BsonSerializer.Deserialize<ActivityInstance>(reader);
+                    innerDict.Add(innerKey, value);
+                }
+                reader.ReadEndDocument();
+
+                result.Add(key, innerDict);
             }
             reader.ReadEndDocument();
 
@@ -98,56 +114,43 @@ namespace Joyn.DokRouter.MongoDAL
 
         void IBsonSerializer.Serialize(BsonSerializationContext context, BsonSerializationArgs args, object value)
         {
-            Serialize(context, args, (Dictionary<Guid, ActivityInstance>)value); // Cast and call the type-specific Serialize method
+            Serialize(context, args, (Dictionary<int, Dictionary<Guid, ActivityInstance>>)value); // Cast and call the type-specific Serialize method
         }
     }
 
+
+
     #region OLD Serializers
-    //public class ActivityInstancesDoubleDictionarySerializer : IBsonSerializer<Dictionary<int, Dictionary<Guid, ActivityInstance>>>
+
+    //public class ActivityInstancesFromGuidDictionarySerializer : IBsonSerializer<Dictionary<Guid, ActivityInstance>>
     //{
-    //    public Type ValueType => typeof(Dictionary<int, Dictionary<Guid, ActivityInstance>>);
+    //    public Type ValueType => typeof(Dictionary<Guid, ActivityInstance>);
 
     //    // Type-specific Serialize method
-    //    public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Dictionary<int, Dictionary<Guid, ActivityInstance>> value)
+    //    public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Dictionary<Guid, ActivityInstance> value)
     //    {
     //        var writer = context.Writer;
     //        writer.WriteStartDocument();
     //        foreach (var outerKvp in value)
     //        {
     //            writer.WriteName(outerKvp.Key.ToString());
-    //            writer.WriteStartDocument();
-    //            foreach (var innerKvp in outerKvp.Value)
-    //            {
-    //                writer.WriteName(innerKvp.Key.ToString());
-    //                BsonSerializer.Serialize(writer, innerKvp.Value);
-    //            }
-    //            writer.WriteEndDocument();
+    //            BsonSerializer.Serialize(writer, outerKvp.Value);
     //        }
     //        writer.WriteEndDocument();
     //    }
 
     //    // Implement general object deserialization method required by IBsonSerializer
-    //    public Dictionary<int, Dictionary<Guid, ActivityInstance>> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
+    //    public Dictionary<Guid, ActivityInstance> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
     //    {
-    //        var result = new Dictionary<int, Dictionary<Guid, ActivityInstance>>();
+    //        var result = new Dictionary<Guid, ActivityInstance>();
     //        var reader = context.Reader;
 
     //        reader.ReadStartDocument();
     //        while (reader.ReadBsonType() != BsonType.EndOfDocument)
     //        {
-    //            var key = int.Parse(reader.ReadName());
-    //            var innerDict = new Dictionary<Guid, ActivityInstance>();
-
-    //            reader.ReadStartDocument();
-    //            while (reader.ReadBsonType() != BsonType.EndOfDocument)
-    //            {
-    //                var innerKey = Guid.Parse(reader.ReadName());
-    //                var value = BsonSerializer.Deserialize<ActivityInstance>(reader);
-    //                innerDict.Add(innerKey, value);
-    //            }
-    //            reader.ReadEndDocument();
-
-    //            result.Add(key, innerDict);
+    //            var key = Guid.Parse(reader.ReadName());
+    //            var value = BsonSerializer.Deserialize<ActivityInstance>(reader);
+    //            result.Add(key, value);
     //        }
     //        reader.ReadEndDocument();
 
@@ -161,7 +164,7 @@ namespace Joyn.DokRouter.MongoDAL
 
     //    void IBsonSerializer.Serialize(BsonSerializationContext context, BsonSerializationArgs args, object value)
     //    {
-    //        Serialize(context, args, (Dictionary<int, Dictionary<Guid, ActivityInstance>>)value); // Cast and call the type-specific Serialize method
+    //        Serialize(context, args, (Dictionary<Guid, ActivityInstance>)value); // Cast and call the type-specific Serialize method
     //    }
     //}
 

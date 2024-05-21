@@ -28,6 +28,6 @@ namespace Joyn.DokRouter.Common.Payloads
         /// </summary>
         public byte[]? MarshalledExternalData { get; set; }
 
-        public Dictionary<string, string> ProcessInstanceData { get; set; }
+        public Dictionary<string, string>? ProcessInstanceData { get; set; }
     }
 }

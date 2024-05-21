@@ -16,7 +16,7 @@ namespace Joyn.DokRouter.MongoDAL
         public static void Startup(string connectionString, string databaseName)
         {
             BsonSerializer.RegisterSerializer<Dictionary<int, InstructionInstance>>(new InstructionInstanceFromIntDictionarySerializer());
-            BsonSerializer.RegisterSerializer<Dictionary<Guid, ActivityInstance>>(new ActivityInstancesFromGuidDictionarySerializer());
+            BsonSerializer.RegisterSerializer<Dictionary<int, Dictionary<Guid, ActivityInstance>>>(new ActivityInstancesDoubleDictionarySerializer());
             BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
 
 
