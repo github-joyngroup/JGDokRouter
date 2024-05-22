@@ -30,6 +30,11 @@
         /// </summary>
         public int? CycleCounter { get; set; }
 
+        /// <summary>
+        /// When the activity is executed by a trigger, this will identify the trigger instace that started the activity
+        /// </summary>
+        public Guid? PipelineTriggerIdentifier { get; set; }
+
         public override bool Equals(object? obj)
         {
             if (obj is ActivityExecutionKey key)
@@ -37,14 +42,15 @@
                 return key.PipelineInstanceKey.Equals(this.PipelineInstanceKey) &&
                        key.ActivityConfigurationHash == this.ActivityConfigurationHash &&
                        key.ActivityDefinitionIdentifier == this.ActivityDefinitionIdentifier &&
-                       key.ActivityExecutionIdentifier == this.ActivityExecutionIdentifier;
+                       key.ActivityExecutionIdentifier == this.ActivityExecutionIdentifier &&
+                       key.PipelineTriggerIdentifier == this.PipelineTriggerIdentifier;
             }
             return false;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(PipelineInstanceKey.GetHashCode(), ActivityConfigurationHash, ActivityDefinitionIdentifier, ActivityExecutionIdentifier);
+            return HashCode.Combine(PipelineInstanceKey.GetHashCode(), ActivityConfigurationHash, ActivityDefinitionIdentifier, ActivityExecutionIdentifier, PipelineTriggerIdentifier);
         }
     }
 }

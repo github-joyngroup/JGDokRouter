@@ -17,6 +17,14 @@ namespace Joyn.LLMDriver.DAL
         public const string FileInformation_LocalFilePath = "LocalFilePath";
         public const string FileInformation_ContentTypeKey = "ContentType";
 
+        public const string AssetInformationKey = "AssetInformation";
+        public const string AssetKeyImage = "Image";
+        public const string AssetKeyStructure = "Structure";
+        public const string AssetKeyDDOCRMap = "DDOCRMap";
+        public const string AssetKeyFullText = "FullText";
+        public const string AssetKeyTextLines = "TextLines";
+        public const string AssetKeyConsolidatedTextLines = "ConsolidatedTextLines";
+
         /*
         public const string MetadataKey = "Metadata";
         public const string EnvelopeUuidKey = "EnvelopeUuid";
@@ -32,6 +40,6 @@ namespace Joyn.LLMDriver.DAL
         private const string ActivityModelKey = "ActivityModel";
         
         private const string DomainIdKey = "DomainId";
-        */       
+        */
     }
 }

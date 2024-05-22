@@ -50,6 +50,8 @@ catch (Exception ex)
 
 try
 {
+    System.Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", app.Configuration["GoogleApplicationCredentialsFilepath"]);
+
     //Start specific services here
     FileWorker.Startup(app.Configuration["NRecoLicenseOwner"], app.Configuration["NRecoLicenseKey"]);
     BaseMongoMapper.Startup(app.Configuration["MongoConnection"], app.Configuration["MongoDatabaseName"]);

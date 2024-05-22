@@ -10,6 +10,7 @@ using System.Xml.Linq;
 using System;
 using Joyn.Timelog.Common.Models;
 using System.Text.Json;
+using DocDigitizer.Common.Extensions;
 
 namespace Joyn.DokRouter
 {
@@ -175,6 +176,54 @@ namespace Joyn.DokRouter
                     //Load pipeline definition based on configuration and add it to the activity pool
                     PipelineDefinition pipelineDefinition = BuildPipelineDefinitionFromConfiguration(pipelineConfiguration);
                     PipelinePool.Add(pipelineDefinition.Configuration.Identifier, pipelineDefinition);
+
+                    //Check if pipeline has trigger automatism
+                    if(pipelineConfiguration.Trigger != null)
+                    {
+                        PipelineTriggerInstance pipelineTriggerInstance = new PipelineTriggerInstance()
+                        {
+                            Identifier = Guid.NewGuid(),
+                            ConfigurationIdentifier = pipelineConfiguration.Trigger.Identifier,
+                            PipelineIdentifier = pipelineConfiguration.Identifier,
+
+                            PreConditionActivity = pipelineConfiguration.Trigger.PreConditionActivityIdentifier.HasValue ? ActivityPool.TryGetAndReturnValue(pipelineConfiguration.Trigger.PreConditionActivityIdentifier.Value) : null,
+                            ExpectedPreConditionField = pipelineConfiguration.Trigger.ExpectedPreConditionField,
+
+                            NextExecution = DateTime.UtcNow, //Initialize to now so it will trigger the first time
+                            Kind = pipelineConfiguration.Trigger.Kind,
+                            TimeFrequencySeconds = pipelineConfiguration.Trigger.TimeFrequencySeconds
+                        };
+
+                        //Validations of the trigger configuration
+                        if(pipelineTriggerInstance.PreConditionActivity == null && pipelineConfiguration.Trigger.PreConditionActivityIdentifier.HasValue)
+                        {
+                            DDLogger.LogWarn<MainEngine>($"PreConditionActivity for pipeline trigger {pipelineTriggerInstance.Identifier} not found in the activity pool. Check the configuration of the pipeline trigger {pipelineConfiguration.Trigger.Identifier}. Will continue without pre condition activity");
+                            continue;
+                        }
+
+                        if (pipelineTriggerInstance.PreConditionActivity != null && string.IsNullOrWhiteSpace(pipelineTriggerInstance.ExpectedPreConditionField))
+                        {
+                            DDLogger.LogWarn<MainEngine>($"PreConditionActivity was loaded for {pipelineTriggerInstance.Identifier} but no ExpectedPreConditionField was given. Will continue without pre condition activity");
+                            pipelineTriggerInstance.PreConditionActivity = null;
+                            continue;
+                        }
+
+                        switch (pipelineConfiguration.Trigger.Kind)
+                        {
+                            case PipelineTriggerKind.TimerFrequency:
+                                if (!pipelineTriggerInstance.TimeFrequencySeconds.HasValue)
+                                {
+                                    DDLogger.LogWarn<MainEngine>($"Pipeline Trigger {pipelineTriggerInstance.Identifier} was configured with Kind TimerFrequency but without TimeFrequencySeconds. Trigger will be discarded");
+                                    break;
+                                }
+                                EngineTriggering.RegisterPipelineTrigger(pipelineTriggerInstance);
+                                break;
+
+                            default:
+                                DDLogger.LogError<MainEngine>($"Unknown or not implemented pipeline trigger kind: {pipelineConfiguration.Trigger.Kind.ToString()}");
+                                break;
+                        }
+                    }   
                 }
 
                 #endregion
@@ -729,7 +778,6 @@ namespace Joyn.DokRouter
                     {
                         ActivityExecutionKey = activityExecutionKey,
                         MarshalledExternalData = pipelineInstance.MarshalledExternalData,
-
                     });
                 });
 
@@ -754,6 +802,13 @@ namespace Joyn.DokRouter
         /// </summary>
         public static void EndActivity(EndActivity endActivityPayload)
         {
+            //Switch between end a trigger activity or a regular activity
+            if(endActivityPayload.ActivityExecutionKey.PipelineTriggerIdentifier.HasValue)
+            {
+                EngineTriggering.OnPreConditionActivityEnd(endActivityPayload);
+                return;
+            }
+
             PipelineInstancesLocker.TryGetValue(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey, out var locker);
             if (locker == null)
             {

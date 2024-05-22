@@ -14,5 +14,7 @@
         public string ContentType { get; set; }
 
         public int TotalPages { get; set; }
+
+        public List<string> PageImagesPaths { get; set; }
     }
 }

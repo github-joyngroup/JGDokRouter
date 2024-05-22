@@ -37,6 +37,11 @@ namespace Joyn.DokRouter.Common.Models
         public bool Disabled { get; set; }
 
         /// <summary>
+        /// For automation purposes, the pipeline can have a trigger configuration, that will be used to start the pipeline execution
+        /// </summary>
+        public PipelineTriggerConfiguration Trigger { get; set; }
+
+        /// <summary>
         /// Common configurations that will be used by the activity
         /// </summary>
         public CommonConfigurations CommonConfigurations { get; set; }

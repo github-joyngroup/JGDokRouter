@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DocDigitizer.Common.Algorithms" Version="1.0.3" />
     <PackageReference Include="DocDigitizer.Common.DAL" Version="2.0.1" />
     <PackageReference Include="DocDigitizer.Common.WAPI" Version="1.0.11" />
     <PackageReference Include="Google.Cloud.Vision.V1" Version="3.6.0" />

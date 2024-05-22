@@ -63,7 +63,7 @@ namespace Joyn.DokRouterServer.HelperWorkers
         public static async void SetupCycleActivity(StartActivityOut startActivityPayload)
         {
             Console.WriteLine("Executing SetupCycle activity");
-            Thread.Sleep(Random.Shared.Next(2000, 5000));
+            Thread.Sleep(Random.Shared.Next(2000, 3000));
             var numberCycles = Random.Shared.Next(4, 20);
             Console.WriteLine($"Finished SetupCycle execution - will ask for {numberCycles} cycles");
 
@@ -88,7 +88,7 @@ namespace Joyn.DokRouterServer.HelperWorkers
         public static async void ExecuteCycleActivity(StartActivityOut startActivityPayload)
         {
             Console.WriteLine($"Executing Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
-            Thread.Sleep(Random.Shared.Next(2000, 5000));
+            Thread.Sleep(Random.Shared.Next(1000, 1000));
             Console.WriteLine($"Finished Cycle activity #{startActivityPayload.ActivityExecutionKey.CycleCounter}");
 
             EndActivity endActivityPayload = new EndActivity()
