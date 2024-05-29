@@ -21,5 +21,11 @@ namespace Joyn.LLMDriver.Models
         /// <summary>Identifies the record within the database where the extended model will be stored</summary>
         [ProtoMember(4)]
         public string DatabaseIdentifier { get; set; } = string.Empty;
+
+        /// <summary>Identifies the company this activity model relates to</summary>
+        /// <remarks>EPocas, I don't like this approach, it should be kind of context key or it should be within the database record
+        /// TODO: Improve this</remarks>
+        [ProtoMember(5)]
+        public string CompanyIdentifier { get; set; } = string.Empty;
     }
 }

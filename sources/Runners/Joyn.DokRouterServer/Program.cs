@@ -33,8 +33,7 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add<LogExceptionAttribute>();
 });
 
-//TODO: Uncomment when Joyn.DokRouter.EngineMonitor is reimplemented
-//builder.Services.AddHostedService<Joyn.DokRouter.EngineMonitor>();
+builder.Services.AddHostedService<Joyn.DokRouter.EngineMonitor>();
 builder.Services.AddHostedService<Joyn.DokRouter.EngineTriggering>();
 
 var app = builder.Build();
@@ -64,14 +63,15 @@ try
     var dokRouterDAL = new DokRouterMongoDAL();
 
     Joyn.DokRouter.MainEngine.Startup(dokRouterDAL, app.Configuration["EndActivityCallbackUrl"]);
-    //TODO: Uncomment when Joyn.DokRouter.EngineMonitor is reimplemented
-    //Joyn.DokRouter.EngineMonitor.Startup(app.Configuration.GetSection("DokRouterMonitor").Get<Joyn.DokRouter.EngineMonitorConfiguration>(), dokRouterDAL, logger);
+    Joyn.DokRouter.EngineMonitor.Startup(app.Configuration.GetSection("DokRouterMonitor").Get<Joyn.DokRouter.EngineMonitorConfiguration>(), dokRouterDAL, logger);
     Joyn.DokRouter.EngineTriggering.Startup(app.Configuration.GetSection("DokRouterEngineTriggering").Get<Joyn.DokRouter.EngineTriggeringConfiguration>(), dokRouterDAL, logger);
 }
 catch (Exception ex)
 {
     DDLogger.LogException<Program>("Unable to startup Program. Will Quit.", ex);
     System.Threading.Thread.Sleep(5000);
+    Console.WriteLine("Press any key to exit");
+    Console.ReadLine();
     return;
 }
 

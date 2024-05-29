@@ -44,6 +44,8 @@ catch (Exception ex)
 {
     DDLogger.LogException<Program>("Unable to startup Program. Will Quit.", ex);
     System.Threading.Thread.Sleep(5000);
+    Console.WriteLine("Press any key to exit");
+    Console.ReadLine();
     return;
 }
 DDLogger.LogInfo<Program>("Starting...");

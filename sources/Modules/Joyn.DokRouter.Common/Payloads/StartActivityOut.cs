@@ -15,7 +15,7 @@ namespace Joyn.DokRouter.Common.Payloads
         /// <summary>
         /// External data serialized, will be passed to the activities when they are started and updated when the activities end.
         /// </summary>
-        public byte[] MarshalledExternalData { get; set; }
+        public byte[]? MarshalledExternalData { get; set; }
 
         /// <summary>
         /// When DokRouter is executed within an web application, this property will contain the URL to be called back to flag the end of the activity

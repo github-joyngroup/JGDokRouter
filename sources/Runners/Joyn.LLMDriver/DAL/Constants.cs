@@ -18,12 +18,18 @@ namespace Joyn.LLMDriver.DAL
         public const string FileInformation_ContentTypeKey = "ContentType";
 
         public const string AssetInformationKey = "AssetInformation";
-        public const string AssetKeyImage = "Image";
-        public const string AssetKeyStructure = "Structure";
-        public const string AssetKeyDDOCRMap = "DDOCRMap";
-        public const string AssetKeyFullText = "FullText";
-        public const string AssetKeyTextLines = "TextLines";
+        public const string AssetKeyPageImage = "PageImage";
+        public const string AssetKeyPageStructure = "PageStructure";
+        public const string AssetKeyPageDDOCRMap = "PageDDOCRMap";
+        public const string AssetKeyPageFullText = "PageFullText";
+        public const string AssetKeyPageTextLines = "PageTextLines";
         public const string AssetKeyConsolidatedTextLines = "ConsolidatedTextLines";
+
+        public const string AssetKeyChatGPTClassify = "ChatGPTClassify";
+        public const string AssetKeyChatGPTExtract = "ChatGPTExtract";
+        public const string AssetKeyClassificationError = "ClassificationError";
+
+        public const string LLMDocumentExtractionKey = "LLMDocumentExtraction";
 
         /*
         public const string MetadataKey = "Metadata";

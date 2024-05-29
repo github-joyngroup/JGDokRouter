@@ -37,7 +37,10 @@ namespace Joyn.DokRouter
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
                     var response = await HttpClient.PostAsync(activityDefinition.Url, content);
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    "0".ToString();
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        DDLogger.LogError<ActivityStarter>($"Invocation to {activityDefinition.Url} was not successfull! Status Code received: {response.StatusCode}. Content:\r\n{responseContent}");
+                    }
                     break;
 
                 default:

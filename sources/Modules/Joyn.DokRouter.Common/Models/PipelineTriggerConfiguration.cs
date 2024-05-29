@@ -18,6 +18,11 @@ namespace Joyn.DokRouter.Common.Models
         public string KindText { get; set; }
 
         /// <summary>
+        /// Whether or not the pipeline is disabled and should not be used. Disabled pipelines at configuration level will not be available to be used in the engine
+        /// </summary>
+        public bool Disabled { get; set; }
+
+        /// <summary>
         /// When present, trigger will start the pipeline only if the activity with this identifier returns true on expected precondition field of it's ProcessInstanceData end execution
         /// </summary>
         public Guid? PreConditionActivityIdentifier { get; set; }

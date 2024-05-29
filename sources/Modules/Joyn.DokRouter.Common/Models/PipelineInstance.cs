@@ -135,6 +135,11 @@ namespace Joyn.DokRouter.Common.Models
         public DateTime ActivitySLAMoment { get; set; }
 
         /// <summary>
+        /// Whether or not Retry the activity if it expires
+        /// </summary>
+        public bool RetryOnSLAExpired { get; set; }
+
+        /// <summary>
         /// Amount of time that the activity instance expired by, this value is calculated by the monitor and doesn't need to be persited
         /// </summary>
         public TimeSpan? ActivitySLAExpiredBy { get; set; }

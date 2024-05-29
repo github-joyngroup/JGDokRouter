@@ -160,7 +160,6 @@ namespace Joyn.LLMDriver.HelperWorkers
 
                 string filePath = fileInformation.LocalFilePath;
                 string fileName = Path.GetFileName(filePath);
-                string baseAssetsFilePath = model.BaseAssetsFilePath;
 
                 var pdfBytes = File.ReadAllBytes(filePath);
 
@@ -171,19 +170,11 @@ namespace Joyn.LLMDriver.HelperWorkers
                     using (MemoryStream outMs = new MemoryStream())
                     {
                         converter.GenerateImage(filePath, (pageIdx + 1), NReco.PdfRenderer.ImageFormat.Jpeg, outMs);
-
-                        var imageFilePath = Path.Combine($"{baseAssetsFilePath}", $"{LLMProcessDataConstants.AssetKeyImage}.{ (pageIdx + 1)}.jpg");
-                        File.WriteAllBytes(imageFilePath, outMs.ToArray());
-                        pageImagesPaths[pageIdx] = imageFilePath;
-                        assetInformationData.Add($"{LLMProcessDataConstants.AssetKeyImage}_{pageIdx + 1}", imageFilePath);
+                        AssetWorker.PutAsset(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyPageImage}_{(pageIdx + 1)}.jpg", outMs.ToArray(), llmProcessData, $"{LLMProcessDataConstants.AssetKeyPageImage}_{pageIdx + 1}", bUpdateDb: false);
                     }
                 });
-
-                fileInformation.PageImagesPaths = pageImagesPaths;
                 
                 //Save the updated LLMProcessData object
-                llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = fileInformation.ToBsonDocument();
-                llmProcessData.ProcessData[LLMProcessDataConstants.AssetInformationKey] = assetInformationData.ToBsonDocument();
                 LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
             }
             catch (Exception ex)
@@ -231,11 +222,6 @@ namespace Joyn.LLMDriver.HelperWorkers
                     DDLogger.LogWarn<FileWorker>($"{executionId} - ProduceOCRAssets - Total Pages is 0, no OCR Assets to produce");
                     return;
                 }
-                if (fileInformation.PageImagesPaths == null || !fileInformation.PageImagesPaths.Any())
-                {
-                    DDLogger.LogWarn<FileWorker>($"{executionId} - ProduceOCRAssets - Expected fileInformation.PageImagesPaths to be filled with image paths. No OCR assets will be produced.");
-                    return;
-                }
 
                 Dictionary<string, string> assetInformationData = new Dictionary<string, string>();
                 if (llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.AssetInformationKey))
@@ -243,19 +229,14 @@ namespace Joyn.LLMDriver.HelperWorkers
                     assetInformationData = BsonSerializer.Deserialize<Dictionary<string, string>>(llmProcessData.ProcessData[LLMProcessDataConstants.AssetInformationKey]);
                 }
 
-                string baseAssetsFilePath = model.BaseAssetsFilePath;
-
-                Parallel.ForEach(fileInformation.PageImagesPaths, (imageFilePath, state, pageIdx) =>
+                Parallel.ForEach(assetInformationData.Keys.Where(k => k.StartsWith(LLMProcessDataConstants.AssetKeyPageImage)), (key) =>
                 {
-                    var producedAssetsMap = ProduceOCRAssetsForImage(imageFilePath, baseAssetsFilePath, (int)pageIdx);
-                    foreach(var key in producedAssetsMap)
-                    {
-                        assetInformationData.Add($"{key.Key}_{pageIdx + 1}", key.Value);
-                    }
+                    var pageIdx = int.Parse(key.Split('_').Last()) - 1;
+                    ProduceOCRAssetsForImage(assetInformationData[key], model.BaseAssetsFilePath, pageIdx, llmProcessData);
                 });
 
                 //Save the updated LLMProcessData object
-                llmProcessData.ProcessData[LLMProcessDataConstants.AssetInformationKey] = assetInformationData.ToBsonDocument();
+                //llmProcessData.ProcessData[LLMProcessDataConstants.AssetInformationKey] = assetInformationData.ToBsonDocument();
                 LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
             }
             catch(Exception ex)
@@ -265,7 +246,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
         }
 
-        private static Dictionary<string, string> ProduceOCRAssetsForImage(string imageFilePath, string baseAssetsFilePath, int pageIdx)
+        private static void ProduceOCRAssetsForImage(string imageFilePath, string baseAssetsFilePath, int pageIdx, LLMProcessData llmProcessData)
         {
             try
             {
@@ -296,33 +277,23 @@ namespace Joyn.LLMDriver.HelperWorkers
                 {
                     Task.Run(() => 
                     {
-                        var assetPath = Path.Combine($"{baseAssetsFilePath}", $"{LLMProcessDataConstants.AssetKeyStructure}.{(pageIdx + 1)}.json");
-                        File.WriteAllText(assetPath, System.Text.Json.JsonSerializer.Serialize(visionAPIJson));
-                        producedAssetMap.TryAdd(LLMProcessDataConstants.AssetKeyStructure, assetPath);
+                        AssetWorker.PutAssetText(baseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyPageStructure}_{(pageIdx + 1)}.json", System.Text.Json.JsonSerializer.Serialize(visionAPIJson), llmProcessData, $"{LLMProcessDataConstants.AssetKeyPageStructure}_{(pageIdx + 1)}", bUpdateDb: false);
 
                     }),
                     Task.Run(() => 
                     {
-                        var assetPath = Path.Combine($"{baseAssetsFilePath}", $"{LLMProcessDataConstants.AssetKeyFullText}.{(pageIdx + 1)}.txt");
-                        File.WriteAllText(assetPath, ((response.FullTextAnnotation != null && response.FullTextAnnotation.Text != null) ? response.FullTextAnnotation.Text : "")); 
-                        producedAssetMap.TryAdd(LLMProcessDataConstants.AssetKeyFullText, assetPath);
+                        AssetWorker.PutAssetText(baseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyPageFullText}_{(pageIdx + 1)}.txt", ((response.FullTextAnnotation != null && response.FullTextAnnotation.Text != null) ? response.FullTextAnnotation.Text : ""), llmProcessData, $"{LLMProcessDataConstants.AssetKeyPageFullText}_{(pageIdx + 1)}", bUpdateDb: false );
                     }),
                     Task.Run(() => 
                     {
-                        var assetPath = Path.Combine($"{baseAssetsFilePath}", $"{LLMProcessDataConstants.AssetKeyDDOCRMap}.{(pageIdx + 1)}.json");
-                        File.WriteAllText(assetPath, System.Text.Json.JsonSerializer.Serialize(ddOCRMap)); 
-                        producedAssetMap.TryAdd(LLMProcessDataConstants.AssetKeyDDOCRMap, assetPath);
+                        AssetWorker.PutAssetText(baseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyPageDDOCRMap}_{(pageIdx + 1)}.json", System.Text.Json.JsonSerializer.Serialize(ddOCRMap), llmProcessData, $"{LLMProcessDataConstants.AssetKeyPageDDOCRMap}_{(pageIdx + 1)}", bUpdateDb: false );
                     }),
                     Task.Run(() => 
                     {
-                        var assetPath = Path.Combine($"{baseAssetsFilePath}", $"{LLMProcessDataConstants.AssetKeyTextLines}.{(pageIdx + 1)}.txt");
-                        File.WriteAllText(assetPath, (!String.IsNullOrWhiteSpace(textLinesAssetContent) ? textLinesAssetContent : "")); 
-                        producedAssetMap.TryAdd(LLMProcessDataConstants.AssetKeyTextLines, assetPath);
+                        AssetWorker.PutAssetText(baseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyPageTextLines}_{(pageIdx + 1)}.txt", (!String.IsNullOrWhiteSpace(textLinesAssetContent) ? textLinesAssetContent : ""), llmProcessData, $"{LLMProcessDataConstants.AssetKeyPageTextLines}_{(pageIdx + 1)}", bUpdateDb: false );
                     })
                 };
                 Task.WaitAll(taskList.ToArray(), CancellationToken.None);
-
-                return producedAssetMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             }
             catch (Exception ex)
             {
@@ -421,7 +392,7 @@ namespace Joyn.LLMDriver.HelperWorkers
                 var textLinesAssetsPaths = new List<string>();
                 foreach(var key in assetInformationData.Keys.OrderBy(k => k)) //Order by will assure that the keys are ordered by page number
                 {
-                    if(key.Contains(LLMProcessDataConstants.AssetKeyTextLines))
+                    if(key.Contains(LLMProcessDataConstants.AssetKeyPageTextLines))
                     {
                         textLinesAssetsPaths.Add(assetInformationData[key]);
                     }

@@ -56,11 +56,18 @@ try
     FileWorker.Startup(app.Configuration["NRecoLicenseOwner"], app.Configuration["NRecoLicenseKey"]);
     BaseMongoMapper.Startup(app.Configuration["MongoConnection"], app.Configuration["MongoDatabaseName"]);
     DomainController.Startup(app.Configuration.GetSection("DomainController").Get<DomainControllerConfiguration>());
+    DomainWorker.Startup(app.Configuration.GetSection("DomainWorker").Get<DomainWorkerConfiguration>());
+    ResumatorWorker.Startup(app.Configuration.GetSection("ResumatorWorker").Get<ResumatorWorkerConfiguration>());
+    LLMWorker.Startup(app.Configuration["ChatGPTPromptsLocation"]);
+    ChatGPTClient.Startup(app.Configuration.GetSection("ChatGPTClient").Get<ChatGPTClientSettings>());
+    BizapisClient.Startup(app.Configuration.GetSection("BizapisClient").Get<BizapisClientConfiguration>());
 }
 catch (Exception ex)
 {
     DDLogger.LogException<Program>("Unable to startup Program. Will Quit.", ex);
     System.Threading.Thread.Sleep(5000);
+    Console.WriteLine("Press any key to exit");
+    Console.ReadLine();
     return;
 }
 

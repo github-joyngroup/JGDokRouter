@@ -56,7 +56,6 @@ namespace Joyn.DokRouter
         /// </summary>
         private static Dictionary<Guid, Dictionary<string, PipelineDefinition>> ArchivePipelinePool { get; set; } = new Dictionary<Guid, Dictionary<string, PipelineDefinition>>();
 
-
         /// <summary>
         /// Dictionary of start activity handlers, indexed by the hash of their configuration
         /// </summary>
@@ -65,7 +64,7 @@ namespace Joyn.DokRouter
         /// <summary>
         /// Persistence Layer Implementation
         /// </summary>
-        private static IDokRouterDAL DokRouterDAL;
+        private static IDokRouterDAL _dokRouterDAL;
 
         /// <summary>
         /// Current running instances of the engine, indexed by their key
@@ -97,7 +96,7 @@ namespace Joyn.DokRouter
             {
                 DDLogger.LogInfo<MainEngine>($"DokRouter engine is starting...");
 
-                DokRouterDAL = dokRouterDAL;
+                _dokRouterDAL = dokRouterDAL;
 
                 ActivityStarter.Startup(endActivityCallbackUrl);
                 
@@ -105,7 +104,7 @@ namespace Joyn.DokRouter
 
                 DDLogger.LogInfo<MainEngine>($"DokRouter loading common configurations...");
 
-                CommonConfigurations = DokRouterDAL.GetCommonConfigurations();
+                CommonConfigurations = _dokRouterDAL.GetCommonConfigurations();
 
                 #endregion
 
@@ -114,7 +113,7 @@ namespace Joyn.DokRouter
                 DDLogger.LogInfo<MainEngine>($"DokRouter loading activity pool...");
 
                 //Get latest configurations
-                var activityConfigurations = DokRouterDAL.GetActivityConfigurations();
+                var activityConfigurations = _dokRouterDAL.GetActivityConfigurations();
                 if (activityConfigurations == null) { throw new Exception("Unable to Get Activity Configurations from the DAL Implementation"); }
                 if(!activityConfigurations.Any()) { throw new Exception("No Activity Configurations where returned from the DAL Implementation. Cannot Start Engine without an Activity Pool"); }
 
@@ -130,11 +129,11 @@ namespace Joyn.DokRouter
                     activityConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(serializedActivityConfiguration);
                     
                     //Add to the archive configuration if it doesn't exist
-                    var existingArchiveActivityConfiguration = DokRouterDAL.GetArchiveActivityConfigurationByHash(activityConfiguration.Hash);
+                    var existingArchiveActivityConfiguration = _dokRouterDAL.GetArchiveActivityConfigurationByHash(activityConfiguration.Hash);
                     if (existingArchiveActivityConfiguration == null)
                     {
                         DDLogger.LogInfo<MainEngine>($"Detected new activity configuration with Hash: {activityConfiguration.Hash}, related to activity '{activityConfiguration.Name}', persisting so it can be reused if needed");
-                        DokRouterDAL.SaveOrUpdateActivityConfigurationArchive(activityConfiguration);
+                        _dokRouterDAL.SaveOrUpdateActivityConfigurationArchive(activityConfiguration);
                     }
 
                     //Load activity definition based on configuration and add it to the activity pool
@@ -149,7 +148,7 @@ namespace Joyn.DokRouter
                 DDLogger.LogInfo<MainEngine>($"DokRouter loading pipeline pool...");
 
                 //Get latest configurations
-                var pipelineConfigurations = DokRouterDAL.GetPipelineConfigurations();
+                var pipelineConfigurations = _dokRouterDAL.GetPipelineConfigurations();
                 if (pipelineConfigurations == null) { throw new Exception("Unable to Get Pipeline Configurations from the DAL Implementation"); }
                 if (!pipelineConfigurations.Any()) { throw new Exception("No Pipeline Configurations where returned from the DAL Implementation. Cannot Start Engine without a Pipeline Pool"); }
 
@@ -166,11 +165,11 @@ namespace Joyn.DokRouter
                     pipelineConfiguration.Hash = DocDigitizer.Common.Security.Crypto.Hashing.MD5Hashing.SingletonMD5Hasher.Instance.Hash(serializedPipelineConfiguration);
 
                     //Add to the archive configuration if it doesn't exist
-                    var existingArchivePipelineConfiguration = DokRouterDAL.GetArchivePipelineConfigurationByHash(pipelineConfiguration.Hash);
+                    var existingArchivePipelineConfiguration = _dokRouterDAL.GetArchivePipelineConfigurationByHash(pipelineConfiguration.Hash);
                     if (existingArchivePipelineConfiguration == null)
                     {
                         DDLogger.LogInfo<MainEngine>($"Detected new pipeline configuration with Hash: {pipelineConfiguration.Hash}, related to pipeline '{pipelineConfiguration.Name}', persisting so it can be reused if needed");
-                        DokRouterDAL.SaveOrUpdatePipelineConfigurationArchive(pipelineConfiguration);
+                        _dokRouterDAL.SaveOrUpdatePipelineConfigurationArchive(pipelineConfiguration);
                     }
 
                     //Load pipeline definition based on configuration and add it to the activity pool
@@ -178,7 +177,7 @@ namespace Joyn.DokRouter
                     PipelinePool.Add(pipelineDefinition.Configuration.Identifier, pipelineDefinition);
 
                     //Check if pipeline has trigger automatism
-                    if(pipelineConfiguration.Trigger != null)
+                    if(pipelineConfiguration.Trigger != null && !pipelineConfiguration.Trigger.Disabled)
                     {
                         PipelineTriggerInstance pipelineTriggerInstance = new PipelineTriggerInstance()
                         {
@@ -229,7 +228,7 @@ namespace Joyn.DokRouter
                 #endregion
 
                 //Load Running instances from DB 
-                var runningInstances = DokRouterDAL.GetRunningInstances();
+                var runningInstances = _dokRouterDAL.GetRunningInstances();
 
                 foreach (var runningInstance in runningInstances)
                 {
@@ -434,7 +433,7 @@ namespace Joyn.DokRouter
             PipelineInstancesLocker.TryAdd(pipelineInstance.Key, new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion));
 
             //Persist to DB
-            DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+            _dokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
 
             //Timelog start of the pipeline
             var startMessage = Timelog.Client.Logger.LogStart(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Pipeline, pipelineInstance.TransactionIdentifier, pipelineInstance.Key.PipelineInstanceIdentifier, null);
@@ -467,7 +466,7 @@ namespace Joyn.DokRouter
                 erroredPipeline.FinishedAt = DateTime.UtcNow;
                 erroredPipeline.ErroredAt = DateTime.UtcNow;
                 erroredPipeline.ErrorMessage = errorMessage;
-                DokRouterDAL.ErrorPipelineInstance(erroredPipeline);
+                _dokRouterDAL.ErrorPipelineInstance(erroredPipeline);
                 RunningInstances.TryRemove(erroredPipeline.Key, out _);
                 PipelineInstancesLocker.TryRemove(erroredPipeline.Key, out _);
                 DDLogger.LogError<MainEngine>($"Pipeline instance {erroredPipeline.Key.PipelineInstanceIdentifier} errored with message: {errorMessage}. It was moved to the error collection and removed from running instances");
@@ -500,7 +499,7 @@ namespace Joyn.DokRouter
             try
             {
                 pipelineInstance.FinishedAt = DateTime.UtcNow;
-                DokRouterDAL.FinishPipelineInstance(pipelineInstance);
+                _dokRouterDAL.FinishPipelineInstance(pipelineInstance);
                 RunningInstances.TryRemove(pipelineInstance.Key, out _);
                 PipelineInstancesLocker.TryRemove(pipelineInstance.Key, out _);
                 DDLogger.LogInfo<MainEngine>($"Pipeline instance {pipelineInstance.Key.PipelineInstanceIdentifier} finished. It was moved to the Finished collection and removed from running instances");
@@ -676,6 +675,7 @@ namespace Joyn.DokRouter
                                 StartedAt = DateTime.UtcNow,
                                 EndedAt = DateTime.UtcNow,
                                 ActivitySLAMoment = DateTime.UtcNow,
+                                RetryOnSLAExpired = false,
                                 IsSuccess = false,
                                 ErrorMessage = "Activity not found in the pool, skipping it",
                                 Executions = new List<ActivityExecution>()
@@ -715,6 +715,7 @@ namespace Joyn.DokRouter
                         Name = activityDefinition.Configuration.Name,
                         StartedAt = DateTime.UtcNow,
                         ActivitySLAMoment = DateTime.UtcNow.AddSeconds(activityDefinition.CommonConfigurations.ActivitySLATimeInSeconds ?? pipelineDefinition.CommonConfigurations.ActivitySLATimeInSeconds ?? CommonConfigurations.DefaultCommonConfigurations.ActivitySLATimeInSeconds.Value),
+                        RetryOnSLAExpired = activityDefinition.CommonConfigurations.RetryOnSLAExpired.Value,
                         Executions = new List<ActivityExecution>()
                     });
                 }
@@ -722,7 +723,7 @@ namespace Joyn.DokRouter
                 //Check previous executions of the activity that have not ended - This might need to be revisited if we want parallel activity executions
                 if (pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions.Any())
                 {
-                    //Not first execution of activity, meaning we are doing some retry, aditional actions are needed
+                    //Not first execution of activity, meaning we are doing some retry, additional actions are needed
 
                     //All previous activity executions should be flagged as errored
                     foreach (var activityExecution in pipelineInstance.InstructionInstances[pipelineInstance.InstructionPointer].CurrentCycleActivityInstances[nextActivityIdentifier].Executions)
@@ -784,7 +785,7 @@ namespace Joyn.DokRouter
                 DDLogger.LogInfo<MainEngine>($"Started activity {activityDefinition.Configuration.Name} ({activityDefinition.Configuration.Identifier}) in Pipeline {pipelineDefinition.Configuration.Name} ({pipelineDefinition.Configuration.Identifier}) with instance identifier {pipelineInstance.Key.PipelineInstanceIdentifier}");
 
                 //Persist to DB
-                DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+                _dokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
 
                 //Timelog start of the activity
                 var startMessage = Timelog.Client.Logger.LogStart(Microsoft.Extensions.Logging.LogLevel.Information, JGTimelogDomainTable._51_Activity, pipelineInstance.TransactionIdentifier, activityExecutionKey.ActivityExecutionIdentifier, null);
@@ -833,7 +834,7 @@ namespace Joyn.DokRouter
                     if (pipelineDefinition == null)
                     {
                         //Check in DB
-                        var pipelineConfiguration = DokRouterDAL.GetArchivePipelineConfigurationByHash(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineConfigurationHash);
+                        var pipelineConfiguration = _dokRouterDAL.GetArchivePipelineConfigurationByHash(endActivityPayload.ActivityExecutionKey.PipelineInstanceKey.PipelineConfigurationHash);
                         if(pipelineConfiguration != null)
                         {
                             //Add it to memory archive for future usage
@@ -873,7 +874,7 @@ namespace Joyn.DokRouter
                     if (activityDefinition == null)
                     {
                         //Check in DB
-                        var activityConfiguration = DokRouterDAL.GetArchiveActivityConfigurationByHash(endActivityPayload.ActivityExecutionKey.ActivityConfigurationHash);
+                        var activityConfiguration = _dokRouterDAL.GetArchiveActivityConfigurationByHash(endActivityPayload.ActivityExecutionKey.ActivityConfigurationHash);
                         if (activityConfiguration != null)
                         {
                             //Add it to memory archive for future usage
@@ -938,7 +939,7 @@ namespace Joyn.DokRouter
                 }
 
                 //Persist to DB - Finished activity
-                DokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
+                _dokRouterDAL.SaveOrUpdatePipelineInstance(pipelineInstance);
 
                 //Timelog stop of the activity
                 if (StartedLogMessages.TryGetValue(activityExecutionKey.ActivityExecutionIdentifier, out var startMessage))

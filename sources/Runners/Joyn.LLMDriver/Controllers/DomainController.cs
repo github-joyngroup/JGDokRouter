@@ -1,6 +1,7 @@
 ﻿using DocDigitizer.Common.Logging;
 using Google.Protobuf;
 using Joyn.DokRouter.Common;
+using Joyn.DokRouter.Common.Payloads;
 using Joyn.LLMDriver.DAL;
 using Joyn.LLMDriver.HelperWorkers;
 using Joyn.LLMDriver.Models;
@@ -16,6 +17,8 @@ namespace Joyn.LLMDriver.Controllers
     public class DomainController : ControllerBase
     {
         private const string RequestDomainIdKey = "DomainId";
+        private const string RequestTransactionIdKey = "TransactionId";
+        private static Guid DefaultDomainIdentifierForStartFromDokRouter = new Guid("8d93b022-c6a5-4e5e-9cde-02269de744c5");
 
         private static DomainControllerConfiguration _configuration;
 
@@ -36,6 +39,30 @@ namespace Joyn.LLMDriver.Controllers
             return Content($"TO DO: DELETE DOMAIN");
         }
 
+        [HttpPost("StartFromDokRouter")]
+        public IActionResult StartFromDokRouter(StartActivityOut startActivityPayload)
+        {
+            //Do something async
+            Task.Run(() =>
+            {
+                ActivityModel activityModel = null;
+
+                if (!startActivityPayload.TestMode)
+                {
+                    DDLogger.LogInfo<DomainController>($"Executing StartFromDokRouter");
+
+                    //TODO: How to obtain the domain identifier?
+                    activityModel = DomainWorker.StartPipelineByDomain(null, DefaultDomainIdentifierForStartFromDokRouter, null, String.Empty, null, null);
+
+                    DDLogger.LogInfo<DomainController>($"Executed StartFromDokRouter");
+                }
+
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(activityModel), true, String.Empty);
+            });
+
+            return Ok();
+        }
+
         [HttpPost("Start")]
         public IActionResult Start()
         {
@@ -51,88 +78,30 @@ namespace Joyn.LLMDriver.Controllers
             }
             
             if (!Guid.TryParse(Request.Form[RequestDomainIdKey], out Guid domainIdentifier)) { return BadRequest("DomainId is not a valid Guid"); }
-
-            //TODO: Check if domain exists
-
-            //Generate transaction identifier
-            Guid transactionIdentifier = Guid.NewGuid();
-
-            //Create working directory
-            var processFolder = Path.Combine(_configuration.BaseWorkingFolderPath, domainIdentifier.ToString(), "processes", transactionIdentifier.ToString());
-
-            DDLogger.LogDebug<DomainController>($"Creating Process folder: '{processFolder}'");
-            Directory.CreateDirectory(processFolder);
-
-            string baseAssetsFilePath = Path.Combine(processFolder, "assets");
-            Directory.CreateDirectory(baseAssetsFilePath);
-
-            ActivityModel activityModel = new ActivityModel()
-            {
-                TransactionIdentifier = transactionIdentifier,
-                DatabaseIdentifier = transactionIdentifier.ToString(),
-                DomainIdentifier = domainIdentifier,
-                BaseAssetsFilePath = baseAssetsFilePath,
-            };
+            Guid.TryParse(Request.Form[RequestTransactionIdKey], out Guid transactionIdentifier);
 
             Dictionary<string, string> startPayload = new Dictionary<string, string>();
-            foreach(var key in formKeys)
+            foreach (var key in formKeys)
             {
                 startPayload.Add(key, Request.Form[key]);
-            }   
-
-            LLMProcessData llmProcessData = new LLMProcessData()
-            {
-                Id = transactionIdentifier.ToString(),
-                CreatedAt = DateTime.UtcNow,
-                //ProcessData = new Dictionary<string, string>()
-                //{
-                //    { LLMProcessDataConstants.ActivityModelKey, JsonSerializer.Serialize(activityModel) },
-                //    { LLMProcessDataConstants.StartPayloadKey, JsonSerializer.Serialize(startPayload) }
-                //}
-
-                ProcessData = new Dictionary<string, BsonDocument>()
-                {
-                    { LLMProcessDataConstants.ActivityModelKey, activityModel.ToBsonDocument() },
-                    { LLMProcessDataConstants.StartPayloadKey, startPayload.ToBsonDocument() }
-                }
-            };
-
-            LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
-
-            //If a file is received, save it to the assets folder
-            if (Request.Form.Files.Any())
-            {
-                var uploadedFile = Request.Form.Files.First();
-                var filePath = Path.Combine(baseAssetsFilePath, "original.pdf");
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    var copyTask = uploadedFile.CopyToAsync(stream);
-                    Task.WaitAll(copyTask);
-                }
-
-                llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = new UploadedFileInformation()
-                {
-                    EnvelopeUuid = Guid.NewGuid(),
-                    OriginalFileName = uploadedFile.FileName,
-                    OriginalContentType = uploadedFile.ContentType,
-                    LocalFilePath = filePath
-                }.ToBsonDocument();
-
-                LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
             }
 
-            //Start the pipeline
-            Common.StartPipeline(_configuration.LLMDriverPipelineIdentifier, transactionIdentifier, ProtoBufSerializer.Serialize(activityModel), _configuration.DokRouterStartPipelineUrl);
+            //If a file is received, save it to the assets folder
+            IFormFile uploadedFile = null;
+            if (Request.Form.Files.Any())
+            {
+                uploadedFile = Request.Form.Files.First();
+            }
 
-            return new JsonResult(new { success = true, transactionIdentifier = transactionIdentifier });
+            var activityModel = DomainWorker.StartPipelineByDomain(transactionIdentifier == Guid.Empty ? null : transactionIdentifier, domainIdentifier, _configuration.LLMDriverPipelineIdentifier, String.Empty, startPayload, uploadedFile);
+
+            return new JsonResult(new { success = true, transactionIdentifier = activityModel.TransactionIdentifier });
         }
     }
 
     public class DomainControllerConfiguration
     {
-        public string BaseWorkingFolderPath { get; set; }
+        //TODO: Remove this PipelineIdentifier should be configured in domain configuration
         public Guid LLMDriverPipelineIdentifier { get; set; }
-        public string DokRouterStartPipelineUrl { get; set; }
     }
 }
