@@ -57,7 +57,7 @@ namespace Joyn.LLMDriver.Controllers
                     DDLogger.LogInfo<DomainController>($"Executed StartFromDokRouter");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(activityModel), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(activityModel));
             });
 
             return Ok();

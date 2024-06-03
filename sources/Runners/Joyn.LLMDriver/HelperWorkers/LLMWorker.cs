@@ -24,22 +24,24 @@ namespace Joyn.LLMDriver.HelperWorkers
         private const string ClassifyPromptKey = "classify";
         private const string ClassificationResultKey = "classification";
         private const string DocumentContentPlaceholder = "DOCUMENT_CONTENT";
-        private static string ChatGPTPromptsLocation;
+        private static string LLMPromptsLocation;
 
-        private static readonly Dictionary<string, string> ChatGPTPrompts = new Dictionary<string, string>();
+        private static readonly Dictionary<string, string> LLMPrompts = new Dictionary<string, string>();
 
-        public static void Startup(string chatGPTPromptsLocation)
+        public static void Startup(string llmPromptsLocation)
         {
-            ChatGPTPromptsLocation = chatGPTPromptsLocation;
+            LLMPromptsLocation = llmPromptsLocation;
             
             //Pre load all ChatGPT Document classes Prompts
-            foreach (var file in Directory.GetFiles(chatGPTPromptsLocation))
+            foreach (var file in Directory.GetFiles(LLMPromptsLocation))
             {
-                ChatGPTPrompts[Path.GetFileNameWithoutExtension(file).ToLower().RemoveWhitespaces()] = File.ReadAllText(file);
+                LLMPrompts[Path.GetFileNameWithoutExtension(file).ToLower().RemoveWhitespaces()] = File.ReadAllText(file);
             }
         }
 
         #region Classify Using LLM
+
+        //TODO: THIS IS HARDCODED TO USE CHATGPT, SHALL WE CHANGE IT TO BE CONFIGURED. IF SO, WHERE AND HOW?
 
         /// <summary>
         /// Produces the metadata of the uploaded file within a process
@@ -68,7 +70,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
 
             //Prepare prompt
-            var prompt = ChatGPTPrompts[ClassifyPromptKey];
+            var prompt = LLMPrompts[ClassifyPromptKey];
             prompt = prompt.Replace($"{DocumentContentPlaceholder}", consolidatedTextLines);
 
             Stopwatch sw = new Stopwatch();
@@ -122,6 +124,8 @@ namespace Joyn.LLMDriver.HelperWorkers
 
         #region Performs an LLM Extraction
 
+        //TODO: THIS IS HARDCODED TO USE CHATGPT, SHALL WE CHANGE IT TO BE CONFIGURED. IF SO, WHERE AND HOW?
+
         [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._70_PerformLLMExtraction)]
         public static void PerformLLMExtraction(ActivityModel model, Guid executionId)
         {
@@ -159,17 +163,17 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
 
             var classification = llmDocumentExtraction.Classification.ToLower().RemoveWhitespaces();
-            if (!ChatGPTPrompts.ContainsKey(classification))
+            if (!LLMPrompts.ContainsKey(classification))
             {
                 //Try hot loading the prompt
-                var promptDefinitionFilePath = Path.Combine(ChatGPTPromptsLocation, $"{classification}.txt");
+                var promptDefinitionFilePath = Path.Combine(LLMPromptsLocation, $"{classification}.txt");
                 if (File.Exists(promptDefinitionFilePath))
                 {
-                    ChatGPTPrompts[classification] = File.ReadAllText(promptDefinitionFilePath);
+                    LLMPrompts[classification] = File.ReadAllText(promptDefinitionFilePath);
                 }
             }
 
-            if (!ChatGPTPrompts.ContainsKey(classification))
+            if (!LLMPrompts.ContainsKey(classification))
             {
                 //We don't have a prompt for this classification, cannot continue
                 DDLogger.LogWarn<LLMWorker>($"No LLM prompt for extraction in transaction {model.TransactionIdentifier}");
@@ -177,7 +181,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
 
             //Prepare prompt
-            var prompt = ChatGPTPrompts[classification];
+            var prompt = LLMPrompts[classification];
             prompt = prompt.Replace($"{DocumentContentPlaceholder}", consolidatedTextLines);
 
             Stopwatch sw = new Stopwatch();
@@ -203,7 +207,15 @@ namespace Joyn.LLMDriver.HelperWorkers
 
         #endregion
 
-        #region Generic LLM Access Method
+
+        #region Check if document is a Resume (CV)
+
+        //TODO: THIS IS HARDCODED TO USE OLLAMA, SHALL WE CHANGE IT TO BE CONFIGURED. IF SO, WHERE AND HOW?
+
+
+        #endregion
+
+        #region Generic Chat GPT Access Method
 
         private static async Task<string> GetChatGPTResponseAsync(string prompt, string identifier)
         {
@@ -215,6 +227,24 @@ namespace Joyn.LLMDriver.HelperWorkers
             catch (Exception ex) //We don't want to keep the asset factory retrying and consuming ChatGPT tokens, so we catch the exception and return and empty response
             {
                 DDLogger.LogException<LLMWorker>($"ChatGPTClient requestID '{identifier}'", ex);
+                return null;
+            }
+        }
+
+        #endregion
+
+        #region Generic OLLama Access Method
+
+        private static async Task<string> GetOLLamaResponseAsync(string prompt, string identifier)
+        {
+            try
+            {
+                var ollamaResult = await OllamaClient.PlaceRequest(prompt, identifier);
+                return ollamaResult;
+            }
+            catch (Exception ex) //We don't want to keep the asset factory retrying and consuming Ollama tokens, so we catch the exception and return and empty response
+            {
+                DDLogger.LogException<LLMWorker>($"OLlamaClient requestID '{identifier}'", ex);
                 return null;
             }
         }

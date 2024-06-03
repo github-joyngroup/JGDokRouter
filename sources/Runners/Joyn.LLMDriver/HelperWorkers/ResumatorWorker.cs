@@ -15,7 +15,6 @@ using NReco.PdfRenderer;
 using SharpCompress.Common;
 using System;
 using System.Collections.Concurrent;
-using System.Net.Mime;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -24,16 +23,17 @@ namespace Joyn.LLMDriver.HelperWorkers
 {
     public class ResumatorWorker
     {
-        private const int ResumatorPreventThrottlingSleep = 1000; //1 call per second to prevent kickout from the resumator API
+        private const int ResumatorMaxCallsPerMinute = 2; //it's 80, but we want to be safe
         private const string ResumeClassificationValue = "Resume";
+        private const int ResumatorMaxPageSize = 100;
 
         //Static variables
-        private static HttpClient _httpClient;
+        private static RateLimitedHttpClient _httpClient;
         private static ResumatorWorkerConfiguration _configuration;
 
         public static void Startup(ResumatorWorkerConfiguration configuration)
         {
-            _httpClient = new HttpClient();
+            _httpClient = new RateLimitedHttpClient(ResumatorMaxCallsPerMinute);
             _configuration = configuration;
         }
 
@@ -97,7 +97,6 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
         }
 
-
         private static List<Job> ProcessJobsList(string jsonString, string companyIdentifier)
         {
             try
@@ -153,89 +152,86 @@ namespace Joyn.LLMDriver.HelperWorkers
 
         #endregion
 
-        #region Update Candidates
+        #region Update Applications
 
         /// <summary>
-        /// Check against the resumator API if there are new candidates to synchronize
+        /// Check against the resumator API if there are new applications to synchronize. Those deemed new trigger the update candidate pipeline
         /// </summary>
-        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_UpdateCandidates)]
-        public static void UpdateCandidates(ActivityModel model, Guid executionId, LLMCompanyData companyData)
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_UpdateApplications)]
+        public static void UpdateApplications(ActivityModel model, Guid executionId, LLMCompanyData companyData)
         {
             try
             {
-                // Use the ApplicantLatestApplyDate for the API call
-                DateTime? lastResumatorDate = companyData.ApplicantLatestApplyDate;
+                // Use the time interval and pages for the API call
+                DateTime? fromDate = companyData.ApplicantSearchFromDate;
+                DateTime toDate = companyData.ApplicantSearchToDate ?? DateTime.Now;
+                int? page = companyData.ApplicantSearchPage;
 
                 // Base API URL from configuration
                 string baseApiUrl = _configuration.BaseResumatorApiUrl;
 
                 // Complete API endpoint
-                string apiUrl = lastResumatorDate.HasValue
-                    ? $"{baseApiUrl}/applicants/from_apply_date/{lastResumatorDate.Value.ToString("yyyy-MM-dd")}?apikey={companyData.ResumatorApiKey}"
-                    : $"{baseApiUrl}/applicants?apikey={companyData.ResumatorApiKey}";
+                string apiUrl = $"{baseApiUrl}/applicants/";
+                if (fromDate.HasValue) { apiUrl += $"from_apply_date/{fromDate.Value.ToString("yyyy-MM-dd")}"; }
+                apiUrl += $"to_apply_date/{toDate.ToString("yyyy-MM-dd")}";
+                if (page.HasValue) { apiUrl += $"/page/{page}"; }
+                apiUrl += $"?apikey={companyData.ResumatorApiKey}";
 
-                DDLogger.LogDebug<ResumatorWorker>($"{executionId} - Will get candidate list from resumator from url: {apiUrl.Substring(0, apiUrl.IndexOf("apikey"))}");
+                DDLogger.LogDebug<ResumatorWorker>($"{executionId} - Will get applications list from resumator from url: {apiUrl.Substring(0, apiUrl.IndexOf("apikey"))}");
 
                 // Make the API call to fetch the differential list of CVs
                 HttpResponseMessage response = _httpClient.GetAsync(apiUrl).Result;
                 response.EnsureSuccessStatusCode();
 
                 string responseData = response.Content.ReadAsStringAsync().Result;
-                
-                DDLogger.LogInfo<ResumatorWorker>($"{executionId} - Got candidate list response from resumator with length: {responseData.Length}");
+
+                DDLogger.LogInfo<ResumatorWorker>($"{executionId} - Got applications list response from resumator with length: {responseData.Length}");
                 // Process the response data as needed
-                var candidates = ProcessCandidateList(responseData, companyData);
-                DDLogger.LogInfo<ResumatorWorker>($"{executionId} - Parsed candidate list response to: {candidates.Count}");
+                var applications = ProcessApplicationList(responseData, companyData);
+                DDLogger.LogInfo<ResumatorWorker>($"{executionId} - Parsed candidapplicationsate list response to: {applications.Count}");
 
-                //Full list of tuples - CadidateEmail, ApplicationId, this will be used to trigger further processing of these pairs
-                List<(string candidateEmail, string applicationId)> candidatesAndApplications = new List<(string candidateEmail, string applicationId)>();
                 //Update the database
-                if (candidates.Any())
+                if (applications.Any())
                 {
-                    foreach (var candidate in candidates)
+                    foreach (var application in applications)
                     {
-                        //Save the candidate and the application for later use
-                        candidatesAndApplications.Add((candidate.Email, candidate.Applications[companyData.CompanyIdentifier].First().Id));
-
-                        var dbCandidate = ApplicantForMongoDAL.GetApplicantByEmail(candidate.Email);
-                        if (dbCandidate == null)
+                        var dbApplication = ApplicationForMongoDAL.GetApplicationBySourceId(application.Id);
+                        if (dbApplication == null)
                         {
                             //First instance of the candidate, just save it
-                            ApplicantForMongoDAL.SaveOrUpdateApplicant(candidate);
+                            ApplicationForMongoDAL.SaveOrUpdateApplication(application);
+
+                            //Trigger the download candidate 
+                            DomainWorker.StartPipelineByDomain(model.TransactionIdentifier,
+                                                       _configuration.ResumatorUpdateCandidateDomainIdentifier,
+                                                       _configuration.ResumatorUpdateCandidatePipeline,
+                                                       companyData.CompanyIdentifier,
+                                                       new Dictionary<string, string>()
+                                                       {
+                                                           { "applicationId", application.Id }
+                                                       }, null);
                         }
                         else
                         {
-                            //Applicant already exists, add his applicancies to the list
-                            foreach (var application in candidate.Applications.SelectMany(a => a.Value))
-                            {
-                                if (!dbCandidate.Applications.ContainsKey(application.CompanyIdentifier)) { dbCandidate.Applications.Add(application.CompanyIdentifier, new List<Application>()); }
-                                if (!dbCandidate.Applications[application.CompanyIdentifier].Any(a => a.Id == application.Id))
-                                {
-                                    dbCandidate.Applications[application.CompanyIdentifier].Add(application);
-                                }
-                            }
-
-                            //Update candidate in the database
-                            ApplicantForMongoDAL.SaveOrUpdateApplicant(dbCandidate);
+                            //Applicant already exists - do nothing as we do not update applications
+                            "0".ToString();
                         }
-
-                        // Update the last iteration date if this job is most recent
-                        companyData.ApplicantLatestApplyDate = new DateTime(Math.Max((companyData.ApplicantLatestApplyDate ?? DateTime.MinValue).Ticks, candidate.MaxApplyDate.Ticks));
                     }
                 }
 
-                //Trigger the download documentation for each applications
-                foreach(var candidateAndApplication in candidatesAndApplications)
+                //Check if we have more pages to process
+                if (applications.Count >= ResumatorMaxPageSize)
                 {
-                    DomainWorker.StartPipelineByDomain(model.TransactionIdentifier,
-                                                       _configuration.ResumatorDownloadDocumentsDomainIdentifier,
-                                                       _configuration.ResumatorDownloadDocumentsPipeline,
-                                                       companyData.CompanyIdentifier, 
-                                                       new Dictionary<string, string>()
-                                                       {
-                                                           { "candidateEmail", candidateAndApplication.candidateEmail },
-                                                           { "applicationId", candidateAndApplication.applicationId }
-                                                       }, null);
+                    //We have, just increment the page, next cycle will process it
+                    companyData.ApplicantSearchToDate = toDate;
+                    companyData.ApplicantSearchPage = (page ?? 1) + 1;
+                }
+                else
+                {
+                    //No more pages, next cycle shall start interval on the current end date; end date will be cleared
+                    companyData.ApplicantSearchFromDate = toDate;
+                    companyData.ApplicantSearchToDate = null;
+                    companyData.ApplicantSearchPage = null;
                 }
 
                 // Save the updated company data
@@ -253,32 +249,34 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
         }
 
-        private static List<Applicant> ProcessCandidateList(string jsonString, LLMCompanyData companyData)
+        private static List<ApplicationListItem> ProcessApplicationList(string jsonString, LLMCompanyData companyData)
         {
             try
             {
-                // Deserialize the JSON response to a list of candidates
-                var applicants = new List<Applicant>();
+                // Deserialize the JSON response to a list of applications
+                var applications = new List<ApplicationListItem>();
 
                 using (JsonDocument doc = JsonDocument.Parse(jsonString))
                 {
                     foreach (JsonElement element in doc.RootElement.EnumerateArray())
                     {
-                        var applicantId = element.GetProperty("id").GetString();
-                        var applicant = LoadFullApplicant(applicantId, companyData);
-                        if (applicant != null)
+                        var application = new ApplicationListItem
                         {
-                            applicants.Add(applicant);
-                        }
-#if DEBUG
-                        //In Debug we do only one iteration
-                        break;
-#endif
-                        Thread.Sleep(ResumatorPreventThrottlingSleep);
+                            Id = element.GetProperty("id").GetString(),
+                            CompanyIdentifier = companyData.CompanyIdentifier,
+                            FirstName = element.GetProperty("first_name").GetString(),
+                            LastName = element.GetProperty("last_name").GetString(),
+                            Phone = element.GetProperty("prospect_phone").GetString(),
+                            ApplyDate = element.GetProperty("apply_date").GetDateTime(),
+                            JobId = element.GetProperty("job_id").GetString(),
+                            JobTitle = element.GetProperty("job_title").GetString(),
+                        };
+
+                        applications.Add(application);
                     }
                 }
 
-                return applicants;
+                return applications;
             }
             catch (JsonException ex)
             {
@@ -292,7 +290,57 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
         }
 
-        private static Applicant LoadFullApplicant(string applicantId, LLMCompanyData companyData)
+        #endregion
+
+        #region Update Candidate
+
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_UpdateApplications)]
+        public static void UpdateCandidate(ActivityModel model, Guid executionId, LLMCompanyData companyData, string applicationId)
+        {
+            var applicationListItem = ApplicationForMongoDAL.GetApplicationBySourceId(applicationId);
+            if (applicationListItem == null)
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - UpdateCandidate - Application not found in the database: {applicationId}");
+                return;
+            }
+
+            var candidate = LoadFullCandidate(applicationId, companyData);
+            if (candidate == null)
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - UpdateCandidate - Resumator Applicant search returned null for: {applicationId}");
+                return;
+            }
+
+            //Obtain the LLMProcessData object and update with candidate information
+            var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
+            llmProcessData.ProcessData[LLMProcessDataConstants.CandidateInformationKey] = new CandidateInformation() { ApplicationId = applicationId, CandidateEmail = candidate.Email }.ToBsonDocument();
+            LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
+
+            var dbCandidate = CandidateForMongoDAL.GetCandidateByEmail(candidate.Email);
+            if (dbCandidate == null)
+            {
+                //First instance of the candidate, just save it
+                CandidateForMongoDAL.SaveOrUpdateCandidate(candidate);
+            }
+            else
+            {
+                //Candidate already exists, add his applicancies to the list
+                foreach (var application in candidate.Applications.SelectMany(a => a.Value))
+                {
+                    if (!dbCandidate.Applications.ContainsKey(application.CompanyIdentifier)) { dbCandidate.Applications.Add(application.CompanyIdentifier, new List<Application>()); }
+                    if (!dbCandidate.Applications[application.CompanyIdentifier].Any(a => a.Id == application.Id))
+                    {
+                        dbCandidate.Applications[application.CompanyIdentifier].Add(application);
+                    }
+                }
+
+                //Update candidate in the database
+                CandidateForMongoDAL.SaveOrUpdateCandidate(dbCandidate);
+            }
+            applicationListItem.CandidateUpdated = true;
+        }
+
+        private static Candidate LoadFullCandidate(string applicantId, LLMCompanyData companyData)
         {
             try
             {
@@ -308,9 +356,15 @@ namespace Joyn.LLMDriver.HelperWorkers
 
                 string responseData = response.Content.ReadAsStringAsync().Result;
 
+                if (String.IsNullOrWhiteSpace(responseData))
+                {
+                    //Should not happed, but if it does, return null
+                    "0".ToString();
+                    return null;
+                }
                 using (JsonDocument doc = JsonDocument.Parse(responseData))
                 {
-                    return new Applicant
+                    return new Candidate
                     {
                         Email = doc.RootElement.GetProperty("email").GetString(),
 
@@ -357,39 +411,59 @@ namespace Joyn.LLMDriver.HelperWorkers
 
         #region Download Documents
 
-        public static void DownloadDocuments(ActivityModel model, Guid executionId, LLMCompanyData companyData, string applicantEmail, string applicationId)
+        ///<summary>
+        /// Will download the documents for the application and save them to the storage
+        /// Download will be handled by the BizapisClient
+        /// Will return the number of documents as they will be needed to trigger the LLM Document Processing
+        /// TODO: Handle Bizapis problems or errors so we can retry or log the error
+        ///</summary>
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_UpdateDocuments)]
+        public static int UpdateDocuments(ActivityModel model, Guid executionId, LLMCompanyData companyData)
         {
-            var applicant = ApplicantForMongoDAL.GetApplicantByEmail(applicantEmail);
-            if (applicant == null)
+            //Obtain the LLMProcessData object and extract the applicationId and candidate email
+            var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
+            if (llmProcessData == null || llmProcessData.ProcessData == null || !llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.CandidateInformationKey))
             {
-                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - DownloadDocuments - Applicant not found in the database: {applicantEmail}");
-                return;
+                DDLogger.LogError<ResumatorWorker>($"{executionId} - UpdateDocuments - Candidate Information not found in process data");
+                return 0;
+            }
+            var candidateInformation = BsonSerializer.Deserialize<CandidateInformation>(llmProcessData.ProcessData[LLMProcessDataConstants.CandidateInformationKey]);
+
+            var candidate = CandidateForMongoDAL.GetCandidateByEmail(candidateInformation.CandidateEmail);
+            if (candidate == null)
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - UpdateDocuments - Candidate not found in the database: {candidateInformation.CandidateEmail}");
+                return 0;
             }
 
-            if (!applicant.Applications.ContainsKey(companyData.CompanyIdentifier))
+            if (!candidate.Applications.ContainsKey(companyData.CompanyIdentifier))
             {
-                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - DownloadDocuments - Applicant {applicantEmail} does not have applications for company {companyData.CompanyIdentifier}");
-                return;
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - UpdateDocuments - Candidate {candidateInformation.CandidateEmail} does not have applications for company {companyData.CompanyIdentifier}");
+                return 0;
             }
 
-            var application = applicant.Applications[companyData.CompanyIdentifier].FirstOrDefault(a => a.Id == applicationId);
+            var application = candidate.Applications[companyData.CompanyIdentifier].FirstOrDefault(a => a.Id == candidateInformation.ApplicationId);
             if (application == null)
             {
-                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - DownloadDocuments - Applicant {applicantEmail} does not have application {applicationId} for company {companyData.CompanyIdentifier}");
-                return;
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - UpdateDocuments - Candidate {candidateInformation.CandidateEmail} does not have application {candidateInformation.ApplicationId} for company {companyData.CompanyIdentifier}");
+                return 0;
             }
 
             if (application.Documents == null) { application.Documents = new List<ApplicationDocument>(); }
 
-            //TODO - OBTAIN THE DOCUMENTS BINARY
-            Task<List<ResumatorDocument>> filesTask = BizapisClient.GetResumatorDocuments(applicantEmail, application.ApplyDate.ToString("yyyy-MM-dd"), companyData.CompanyIdentifier);
+            string unifiedSearch = String.Empty;
+            if (!String.IsNullOrEmpty(candidate.Email)) { unifiedSearch = $"{unifiedSearch}{(unifiedSearch.Length > 0 ? " " : "")}{candidate.Email}"; }
+            //if (!String.IsNullOrEmpty(candidate.FirstName)) { unifiedSearch = $"{unifiedSearch}{(unifiedSearch.Length > 0 ? " " : "")}{candidate.FirstName}"; }
+            //if (!String.IsNullOrEmpty(candidate.LastName)) { unifiedSearch = $"{unifiedSearch}{(unifiedSearch.Length > 0 ? " " : "")}{candidate.LastName}"; }
+            //if (!String.IsNullOrEmpty(candidate.Phone)) { unifiedSearch = $"{unifiedSearch}{(unifiedSearch.Length > 0 ? " " : "")}{candidate.Phone}"; }
+            Task<List<ResumatorDocument>> filesTask = BizapisClient.GetResumatorDocuments(unifiedSearch, application.ApplyDate.ToString("yyyy-MM-dd"), companyData.CompanyIdentifier);
             filesTask.Wait();
 
             foreach (var file in filesTask.Result)
             {
                 Guid fileIdentifier = Guid.NewGuid();
                 //Save content to storage
-                string storageFolder = Path.Combine(_configuration.BaseApplicationDocumentsPath, applicantEmail.Substring(0, 3), applicantEmail, companyData.CompanyIdentifier, applicationId);
+                string storageFolder = Path.Combine(_configuration.BaseApplicationDocumentsPath, candidateInformation.CandidateEmail.Substring(0, 3), candidateInformation.CandidateEmail, companyData.CompanyIdentifier, candidateInformation.ApplicationId);
                 Directory.CreateDirectory(storageFolder);
                 string storageFilePath = Path.Combine(storageFolder, fileIdentifier.ToString("n") + Path.GetExtension(file.FileName));
 
@@ -404,39 +478,130 @@ namespace Joyn.LLMDriver.HelperWorkers
                     Id = fileIdentifier.ToString("n"), //Should this come from resumator?
                     FilePath = storageFilePath,
                     FileName = file.FileName,
-                    ContentType = file.ContentType
+                    ContentType = file.ContentType,
+
+                    LLMProcessed = false
                 });
             }
 
-            ApplicantForMongoDAL.SaveOrUpdateApplicant(applicant);
+            CandidateForMongoDAL.SaveOrUpdateCandidate(candidate);
+            return filesTask.Result.Count;
 
-            //Obtain the LLMProcessData object
+            ////Obtain the LLMProcessData object
+            //var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
+
+            ////TODO: HOW TO HANDLE MULTIPLE DOCUMENTS OR HOW TO PICK RESUME FOR PROCESSING??
+            //if (application.Documents.Any())
+            //{
+            //    var documentToProcess = application.Documents.First();
+
+            //    //Add file to the process data so it can be further used in the pipeline
+            //    llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = new UploadedFileInformation()
+            //    {
+            //        EnvelopeUuid = Guid.Parse(documentToProcess.Id),
+            //        OriginalFileName = documentToProcess.FileName,
+            //        OriginalContentType = documentToProcess.ContentType,
+            //        LocalFilePath = documentToProcess.FilePath
+            //    }.ToBsonDocument();
+
+            //    //Add Resume classification to the process data so it can be used for further processing
+            //    LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
+            //    {
+            //        Classification = ResumeClassificationValue
+            //    };
+            //    llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
+
+            //    //Save the updated LLMProcessData object
+            //    LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
+            //}
+        }
+
+        #endregion
+
+        #region Process Resume
+
+        ///<summary>
+        /// Will place the document to be processed by the LLM Document Processing pipeline on the corresponding model location
+        ///</summary>
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_PrepareResumeProcessing)]
+        public static void PrepareResumeProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData, int documentToProcessIndex)
+        {
+            //Obtain the LLMProcessData object and extract the applicationId and candidate email
             var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
-
-            //TODO: HOW TO HANDLE MULTIPLE DOCUMENTS OR HOW TO PICK RESUME FOR PROCESSING??
-            if (application.Documents.Any())
+            if (llmProcessData == null || llmProcessData.ProcessData == null || !llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.CandidateInformationKey))
             {
-                var documentToProcess = application.Documents.First();
-
-                //Add file to the process data so it can be further used in the pipeline
-                llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = new UploadedFileInformation()
-                {
-                    EnvelopeUuid = Guid.Parse(documentToProcess.Id),
-                    OriginalFileName = documentToProcess.FileName,
-                    OriginalContentType = documentToProcess.ContentType,
-                    LocalFilePath = documentToProcess.FilePath
-                }.ToBsonDocument();
-
-                //Add Resume classification to the process data so it can be used for further processing
-                LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
-                {
-                    Classification = ResumeClassificationValue
-                };
-                llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
-
-                //Save the updated LLMProcessData object
-                LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
+                DDLogger.LogError<ResumatorWorker>($"{executionId} - PrepareResumeProcessing - Candidate Information not found in process data");
+                return;
             }
+            var candidateInformation = BsonSerializer.Deserialize<CandidateInformation>(llmProcessData.ProcessData[LLMProcessDataConstants.CandidateInformationKey]);
+
+            var candidate = CandidateForMongoDAL.GetCandidateByEmail(candidateInformation.CandidateEmail);
+            if (candidate == null)
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - PrepareResumeProcessing - Candidate not found in the database: {candidateInformation.CandidateEmail}");
+                return;
+            }
+
+            if (!candidate.Applications.ContainsKey(companyData.CompanyIdentifier))
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - PrepareResumeProcessing - Candidate {candidateInformation.CandidateEmail} does not have applications for company {companyData.CompanyIdentifier}");
+                return;
+            }
+
+            var application = candidate.Applications[companyData.CompanyIdentifier].FirstOrDefault(a => a.Id == candidateInformation.ApplicationId);
+            if (application == null)
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - PrepareResumeProcessing - Candidate {candidateInformation.CandidateEmail} does not have application {candidateInformation.ApplicationId} for company {companyData.CompanyIdentifier}");
+                return;
+            }
+
+            if (application.Documents == null || !application.Documents.Any() || application.Documents.Count < documentToProcessIndex) 
+            {
+                DDLogger.LogWarn<ResumatorWorker>($"{executionId} - PrepareResumeProcessing - Candidate {candidateInformation.CandidateEmail} application {candidateInformation.ApplicationId} for company {companyData.CompanyIdentifier} does not contain document with index {documentToProcessIndex} cannot continue");
+                return;
+            }
+
+            var documentToProcess = application.Documents[documentToProcessIndex];
+
+            //Add file to the process data so it can be further used in the pipeline
+            llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = new UploadedFileInformation()
+            {
+                EnvelopeUuid = Guid.Parse(documentToProcess.Id),
+                OriginalFileName = documentToProcess.FileName,
+                OriginalContentType = documentToProcess.ContentType,
+                LocalFilePath = documentToProcess.FilePath
+            }.ToBsonDocument();
+
+            //Add Resume classification to the process data so it can be used for further processing
+            LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
+            {
+                Classification = ResumeClassificationValue
+            };
+            llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
+
+            //Save the updated LLMProcessData object
+            LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
+        }
+
+        ///<summary>
+        /// Will clear the document to be processed by the LLM Document Processing pipeline to keep the process data clean after processing
+        ///</summary>
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_ClearResumeProcessing)]
+        public static void ClearResumeProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData)
+        {
+            //Obtain the LLMProcessData object and extract the applicationId and candidate email
+            var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
+            if (llmProcessData == null || llmProcessData.ProcessData == null)
+            {
+                DDLogger.LogError<ResumatorWorker>($"{executionId} - ClearResumeProcessing - Candidate Information not found in process data");
+                return;
+            }
+
+            //Clear file information key 
+            llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = null;
+
+            //Save the updated LLMProcessData object
+            LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
         }
 
         #endregion
@@ -445,11 +610,16 @@ namespace Joyn.LLMDriver.HelperWorkers
     public class ResumatorWorkerConfiguration
     {
         public string BaseResumatorApiUrl { get; set; }
-        public Guid ResumatorDownloadDocumentsDomainIdentifier { get; set; }
-        public Guid ResumatorDownloadDocumentsPipeline { get; set; }
+
+        public Guid ResumatorUpdateCandidateDomainIdentifier { get; set; }
+        public Guid ResumatorUpdateCandidatePipeline { get; set; }
 
         public string BaseApplicationDocumentsPath { get; set; }
     }
 
-    
+    public class CandidateInformation
+    {
+        public string ApplicationId { get; set; }
+        public string CandidateEmail { get; set; }
+    }
 }

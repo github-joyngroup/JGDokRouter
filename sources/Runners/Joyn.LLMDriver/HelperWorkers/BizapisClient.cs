@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using static Google.Rpc.Context.AttributeContext.Types;
 
 namespace Joyn.LLMDriver.HelperWorkers
 {
@@ -25,12 +26,12 @@ namespace Joyn.LLMDriver.HelperWorkers
         /// <param name="email">The applicant Email</param>
         /// <param name="apply_date">The application moment</param>
         /// <param name="portal">Company identifier</param>
-        public static async Task<List<ResumatorDocument>> GetResumatorDocuments(string email, string apply_date, string portal)
+        public static async Task<List<ResumatorDocument>> GetResumatorDocuments(string unified_search, string apply_date, string portal)
         {
             //Prepare the request body to send to ChatGPT
             var requestBody = new
             {
-                email = email,
+                unified_search = unified_search,
                 apply_date = apply_date,
                 portal = portal
             };
@@ -45,7 +46,7 @@ namespace Joyn.LLMDriver.HelperWorkers
                 var response = await httpClient.PostAsync(_configuration.GetResumatorDocumentsUrl, content);
                 var responseContent = await response.Content.ReadAsStringAsync();
 
-                DDLogger.LogDebug<ChatGPTClient>($"BizapisClient response status: {response.StatusCode} length: {responseContent}");
+                DDLogger.LogDebug<ChatGPTClient>($"BizapisClient response status: {response.StatusCode} length: {responseContent.Length}");
 
                 Func<string, List<ResumatorDocument>> ExtractAnswer = (json) =>
                 {
@@ -55,30 +56,71 @@ namespace Joyn.LLMDriver.HelperWorkers
                     using (JsonDocument doc = JsonDocument.Parse(json))
                     {
                         JsonElement root = doc.RootElement;
-                        JsonElement files = root.GetProperty("files");
-                        for(var idx = 0; idx < files.GetArrayLength(); idx++)
+                        JsonElement dataElm;
+                        JsonElement errorElm;
+                        JsonElement filesElm;
+                        if (root.TryGetProperty("data", out dataElm))
                         {
-                            retList.Add(new ResumatorDocument()
+                            if (dataElm.TryGetProperty("error", out errorElm))
                             {
-                                FileName = files[idx].GetProperty("filename").GetString().Trim(),
-                                ContentType = files[idx].GetProperty("content_type").GetString().Trim(),
-                                Content = Convert.FromBase64String(files[idx].GetProperty("content").GetString().Trim())
-                            });
+                                DDLogger.LogError<BizapisClient>($"Error connecting to BIZAPIS API.\r\nResponse Code: {response.StatusCode}\r\n{errorElm.GetString().Trim()}");
+                                return new List<ResumatorDocument>();
+                            }
+                            if (dataElm.TryGetProperty("files", out filesElm))
+                            {
+                                for (var idx = 0; idx < filesElm.GetArrayLength(); idx++)
+                                {
+                                    retList.Add(new ResumatorDocument()
+                                    {
+                                        FileName = filesElm[idx].GetProperty("fileName").GetString().Trim(),
+                                        ContentType = filesElm[idx].GetProperty("content_type").GetString().Trim(),
+                                        Content = Convert.FromBase64String(filesElm[idx].GetProperty("content").GetString().Trim())
+                                    });
+                                }
+                            }
+                        }
+                        else if (root.TryGetProperty("error", out errorElm))
+                        {
+                            DDLogger.LogError<BizapisClient>($"Error connecting to BIZAPIS API.\r\nResponse Code: {response.StatusCode}\r\n{errorElm.GetString().Trim()}");
+                            return new List<ResumatorDocument>();
+                        }
+                        else if (root.TryGetProperty("files", out filesElm))
+                        {
+                            for (var idx = 0; idx < filesElm.GetArrayLength(); idx++)
+                            {
+                                retList.Add(new ResumatorDocument()
+                                {
+                                    FileName = filesElm[idx].GetProperty("filename").GetString().Trim(),
+                                    ContentType = filesElm[idx].GetProperty("content_type").GetString().Trim(),
+                                    Content = Convert.FromBase64String(filesElm[idx].GetProperty("content").GetString().Trim())
+                                });
+                            }
+                        }
+                        else
+                        {
+                            DDLogger.LogWarn<BizapisClient>($"BizapisClient response did not contain files for: unified_search: '{unified_search}', apply_date: '{apply_date}', portal: '{portal}'");
+                            DDLogger.LogWarn<BizapisClient>($"BizapisClient response:\r\n{json}");
                         }
                     }
 
                     return retList;
                 };
 
-                Func<string, string> ExtractError= (json) =>
+                Func<string, string> ExtractError = (json) =>
                 {
                     ///WILL BIZAPIS ERRO HAVE THIS STRUCTURE?
                     if (String.IsNullOrWhiteSpace(json)) { return String.Empty; }
-                    using (JsonDocument doc = JsonDocument.Parse(json))
+                    try
                     {
-                        JsonElement root = doc.RootElement;
-                        JsonElement error = root.GetProperty("error");
-                        return error.GetProperty("message").GetString().Trim();
+                        using (JsonDocument doc = JsonDocument.Parse(json))
+                        {
+                            JsonElement root = doc.RootElement;
+                            return root.GetProperty("message").GetString().Trim();
+                        }
+                    }
+                    catch
+                    {
+                        return "Response is not Json or does not have the expected format";
                     }
                 };
 
@@ -88,7 +130,11 @@ namespace Joyn.LLMDriver.HelperWorkers
                     return ExtractAnswer(responseContent);
                 }
 
-                throw new Exception($"Error connecting to ChatGPT API.\r\nResponse Code: {response.StatusCode}\r\n{ExtractError(responseContent)}");
+                DDLogger.LogError<BizapisClient>($"Error connecting to BIZAPIS API.\r\nResponse Code: {response.StatusCode}\r\n{ExtractError(responseContent)}");
+            }
+            catch (HttpRequestException httpEx)
+            {
+                DDLogger.LogError<BizapisClient>($"Error obtaining response from BIZAPIS API: {httpEx.Message}{(httpEx.InnerException != null ? $"\r\n{httpEx.InnerException.Message}":"")}");
             }
             catch (Exception ex)
             {
@@ -96,6 +142,7 @@ namespace Joyn.LLMDriver.HelperWorkers
                 throw;
             }
 
+            return new List<ResumatorDocument>();
         }
     }
 

@@ -4,16 +4,6 @@
     /// This classes and all resume handling should be moved to a specific project that would produce a DLL or nuget package
     /// </summary>
 
-    public interface IJGResumeDAL
-    {
-        public Job GetJobById(string jobId);
-        public void SaveOrUpdateJob(Job job);
-
-        public Applicant GetApplicantById(string applicantId);
-        public Applicant GetApplicantByEmail(string email);
-        public void SaveOrUpdateApplicant(Applicant job);
-    }
-
     public class Job
     {
         public string Id { get; set; }
@@ -40,7 +30,23 @@
         public string Questionnaire { get; set; }
     }
 
-    public class Applicant
+    public class ApplicationListItem
+    {
+        public string Id { get; set; }
+        public string CompanyIdentifier { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Phone { get; set; }
+        public DateTime ApplyDate { get; set; }
+        public string JobId { get; set; }
+        public string JobTitle { get; set; }
+
+        //Control fields
+        public bool CandidateUpdated { get; set; }
+        public bool ApplicationDocumentsDownloaded { get; set; }
+    }
+
+    public class Candidate
     {
         public string Email { get; set; }
         
@@ -51,8 +57,6 @@
         public string Location { get; set; }
         public string Phone { get; set; }
         public string LinkedInUrl { get; set; }
-
-        public DateTime MaxApplyDate { get { return Applications.Values.Max(a => a.Max(a2 => a2.ApplyDate)); } }
 
         /// <summary>
         /// Dictionary of applications by company identifier
@@ -77,5 +81,8 @@
         public string FileName { get; set; }
         public string FilePath { get; set; }
         public string ContentType { get; set; }
+
+        //Control Fields
+        public bool LLMProcessed { get; set; }
     }
 }

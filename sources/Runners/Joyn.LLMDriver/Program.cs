@@ -3,7 +3,9 @@ using DocDigitizer.Common.WAPI.Filters;
 using Joyn.LLMDriver.Controllers;
 using Joyn.LLMDriver.DAL;
 using Joyn.LLMDriver.HelperWorkers;
+using Joyn.LLMDriver.Models;
 using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +62,7 @@ try
     ResumatorWorker.Startup(app.Configuration.GetSection("ResumatorWorker").Get<ResumatorWorkerConfiguration>());
     LLMWorker.Startup(app.Configuration["ChatGPTPromptsLocation"]);
     ChatGPTClient.Startup(app.Configuration.GetSection("ChatGPTClient").Get<ChatGPTClientSettings>());
+    OllamaClient.Startup(app.Configuration.GetSection("OllamaClient").Get<OllamaClientSettings>());
     BizapisClient.Startup(app.Configuration.GetSection("BizapisClient").Get<BizapisClientConfiguration>());
 }
 catch (Exception ex)
@@ -70,7 +73,6 @@ catch (Exception ex)
     Console.ReadLine();
     return;
 }
-
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

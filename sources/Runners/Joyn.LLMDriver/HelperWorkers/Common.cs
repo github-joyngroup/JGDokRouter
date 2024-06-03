@@ -39,14 +39,15 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
         }
 
-        public static async void CallbackEndActivity(StartActivityOut startActivityPayload, byte[] marshalledExternalData, bool isSuccess, string errorMessage)
+        public static async void CallbackEndActivity(StartActivityOut startActivityPayload, byte[] marshalledExternalData, Dictionary<string, string> processInstanceData = null, bool isSuccess = true, string errorMessage = "")
         {
             EndActivity endActivityPayload = new EndActivity()
             {
                 ActivityExecutionKey = startActivityPayload.ActivityExecutionKey,
                 IsSuccess = isSuccess,
                 ErrorMessage = errorMessage,
-                MarshalledExternalData = marshalledExternalData
+                MarshalledExternalData = marshalledExternalData,
+                ProcessInstanceData = processInstanceData
             };
             var jsonContent = System.Text.Json.JsonSerializer.Serialize(endActivityPayload);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");

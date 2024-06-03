@@ -45,54 +45,24 @@ namespace Joyn.LLMDriver.Controllers
                             ResumatorWorker.UpdateJobs(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, company);
 
                             DDLogger.LogInfo<CVProcessController>($"{model.TransactionIdentifier} - {startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier} - Start Update Candidates for {company.CompanyIdentifier}");
-                            ResumatorWorker.UpdateCandidates(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, company);
+                            ResumatorWorker.UpdateApplications(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, company);
                         }
                     }
                     
                     _logger.LogInformation($"Executed CVProcess.StartFormatCVProcesses for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
         }
 
         /// <summary>
-        /// Entry point for the Get Differencial CV List
-        /// </summary>
-        [HttpPost("TestStartResumatorSynchronization")]
-        public IActionResult TestStartResumatorSynchronization()
-        {
-            List<LLMCompanyData> companies = LLMCompanyDataDAL.ListCompanies();
-            foreach (var company in companies)
-            {
-                if (company.CVSynchronizationEnabled)
-                {
-                    var activityModel = new ActivityModel()
-                    {
-                        BaseAssetsFilePath = "Test",
-                        DatabaseIdentifier = Guid.NewGuid().ToString(),
-                        DomainIdentifier = Guid.NewGuid(),
-                        TransactionIdentifier = Guid.NewGuid()
-                    };
-
-                    DDLogger.LogInfo<CVProcessController>($"{activityModel.TransactionIdentifier} - Start Update Jobs for {company.CompanyIdentifier}");
-                    ResumatorWorker.UpdateJobs(activityModel, Guid.NewGuid(), company);
-                    DDLogger.LogInfo<CVProcessController>($"{activityModel.TransactionIdentifier} - Start Update Candidates for {company.CompanyIdentifier}");
-                    ResumatorWorker.UpdateCandidates(activityModel, Guid.NewGuid(), company);
-                }
-            }
-
-            return Ok();
-        }
-
-
-        /// <summary>
         /// Entry point for the Download Documents for Application
         /// </summary>
-        [HttpPost("DownloadDocuments")]
-        public IActionResult DownloadDocuments(StartActivityOut startActivityPayload)
+        [HttpPost("UpdateCandidate")]
+        public IActionResult UpdateCandidate(StartActivityOut startActivityPayload)
         {
             //Do something async
             Task.Run(() =>
@@ -101,57 +71,64 @@ namespace Joyn.LLMDriver.Controllers
 
                 if (!startActivityPayload.TestMode)
                 {
-                    _logger.LogInformation($"Executing CVProcess.DownloadDocuments for: {model.TransactionIdentifier}");
+                    _logger.LogInformation($"Executing CVProcess.UpdateCandidate for: {model.TransactionIdentifier}");
 
                     //Obtain the company data
-                    LLMCompanyData company = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
+                    LLMCompanyData companyData = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
 
                     //Obtain the LLMProcessData object
                     var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
                     if (llmProcessData == null || llmProcessData.ProcessData == null || !llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.StartPayloadKey))
                     {
                         //No Start Data was uploaded - Do nothing as we cannot proceed
-                        DDLogger.LogWarn<FileWorker>($"{model.TransactionIdentifier} - DownloadDocuments - Invoked without StartPayload loaded in Process Data");
+                        DDLogger.LogWarn<FileWorker>($"{model.TransactionIdentifier} - UpdateCandidate - Invoked without StartPayload loaded in Process Data");
                         return;
                     }
 
                     Dictionary<string, string> startPayload = BsonSerializer.Deserialize<Dictionary<string, string>>(llmProcessData.ProcessData[LLMProcessDataConstants.StartPayloadKey]);
-                    if (startPayload == null || !startPayload.Any() || !startPayload.ContainsKey("candidateEmail") || !startPayload.ContainsKey("applicationId"))
+                    if (startPayload == null || !startPayload.Any() || !startPayload.ContainsKey("applicationId") )
                     {
                         //Start Data invalid or inexistent - Do nothing as we cannot proceed
-                        DDLogger.LogWarn<FileWorker>($"{model.TransactionIdentifier} - DownloadDocuments - Invoked with a StartPayload invalid or inexistent");
+                        DDLogger.LogWarn<FileWorker>($"{model.TransactionIdentifier} - UpdateCandidate - Invoked with a StartPayload invalid or inexistent");
                     }
 
-                    ResumatorWorker.DownloadDocuments(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, company, startPayload["candidateEmail"], startPayload["applicationId"]);
+                    ResumatorWorker.UpdateCandidate(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, companyData, startPayload["applicationId"]);
 
-                    _logger.LogInformation($"Executed CVProcess.StartFormatCVProcesses for: {model.TransactionIdentifier}");
+                    _logger.LogInformation($"Executed CVProcess.UpdateCandidate for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
         }
 
         /// <summary>
-        /// Entry point for the Test DownloadDocuments - No longer working as DownloadDocuments now requires a correct database identifier
+        /// Entry point for the Update Documents
         /// </summary>
-        [HttpPost("TestDownloadDocuments")]
-        [Consumes("multipart/form-data")]
-        public IActionResult TestDownloadDocuments([FromForm] string companyIdentifier, [FromForm] string candidateEmail, [FromForm] string applicationId)
+        [HttpPost("UpdateDocuments")]
+        public IActionResult UpdateDocuments(StartActivityOut startActivityPayload)
         {
-            //Obtain the company data
-            LLMCompanyData company = LLMCompanyDataDAL.Get(companyIdentifier);
-
-            var model = new ActivityModel()
+            //Do something async
+            Task.Run(() =>
             {
-                BaseAssetsFilePath = @"c:\Temp\LLMDriver\Tests",
-                DatabaseIdentifier = Guid.NewGuid().ToString(),
-                DomainIdentifier = Guid.NewGuid(),
-                TransactionIdentifier = Guid.NewGuid()
-            };
+                var model = startActivityPayload.MarshalledExternalData != null ? ProtoBufSerializer.Deserialize<ActivityModel>(startActivityPayload.MarshalledExternalData) : null;
+                int nDocumentsFound = 0;
 
-            ResumatorWorker.DownloadDocuments(model, Guid.NewGuid(), company, candidateEmail, applicationId);
+                if (!startActivityPayload.TestMode)
+                {
+                    _logger.LogInformation($"Executing CVProcess.UpdateDocuments for: {model.TransactionIdentifier}");
+                    
+                    //Obtain the company data
+                    LLMCompanyData companyData = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
+
+                    nDocumentsFound = ResumatorWorker.UpdateDocuments(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, companyData);
+
+                    _logger.LogInformation($"Executed CVProcess.UpdateDocuments for: {model.TransactionIdentifier} - Found {nDocumentsFound}");
+                }
+
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), new Dictionary<string, string>() { { "numberDocuments", nDocumentsFound.ToString() } });
+            });
 
             return Ok();
         }

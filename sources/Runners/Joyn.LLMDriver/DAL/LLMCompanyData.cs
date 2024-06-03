@@ -17,7 +17,10 @@ namespace Joyn.LLMDriver.DAL
      
         public string ResumatorApiKey { get; set; }
         public DateTime? JobsLatestOriginalOpenDate { get; set; }
-        public DateTime? ApplicantLatestApplyDate { get; set; }
+
+        public DateTime? ApplicantSearchFromDate { get; set; }
+        public DateTime? ApplicantSearchToDate { get; set; }
+        public int? ApplicantSearchPage { get; set; }
 
         public bool CVSynchronizationEnabled { get; set; }
     }

@@ -21,11 +21,12 @@ namespace Joyn.LLMDriver.HelperWorkers
         {
             //TODO: Check if domain exists and load specific domain configurations - pipelineToStartIdentifier should come from domain configuration
 
-            //Generate transaction identifier
+            //Generate transaction and database identifier
             if (!transactionIdentifier.HasValue) { transactionIdentifier = Guid.NewGuid(); }
+            Guid databaseIdentifier = Guid.NewGuid();
 
             //Create working directory
-            var processFolder = Path.Combine(_configuration.BaseWorkingFolderPath, domainIdentifier.ToString(), "processes", transactionIdentifier.Value.ToString());
+            var processFolder = Path.Combine(_configuration.BaseWorkingFolderPath, domainIdentifier.ToString(), "transactions", transactionIdentifier.Value.ToString(), "processes", databaseIdentifier.ToString("n"));
 
             DDLogger.LogDebug<DomainController>($"Creating Process folder: '{processFolder}'");
             Directory.CreateDirectory(processFolder);
@@ -36,7 +37,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             ActivityModel activityModel = new ActivityModel()
             {
                 TransactionIdentifier = transactionIdentifier.Value,
-                DatabaseIdentifier = transactionIdentifier.Value.ToString(),
+                DatabaseIdentifier = databaseIdentifier.ToString(),
                 DomainIdentifier = domainIdentifier,
                 BaseAssetsFilePath = baseAssetsFilePath,
                 CompanyIdentifier = companyIdentifier
@@ -44,7 +45,7 @@ namespace Joyn.LLMDriver.HelperWorkers
 
             LLMProcessData llmProcessData = new LLMProcessData()
             {
-                Id = transactionIdentifier.Value.ToString(),
+                Id = databaseIdentifier.ToString(),
                 CreatedAt = DateTime.UtcNow,
 
                 ProcessData = new Dictionary<string, BsonDocument>()

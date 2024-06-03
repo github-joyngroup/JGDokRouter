@@ -31,6 +31,8 @@ namespace Joyn.LLMDriver.DAL
 
         public const string LLMDocumentExtractionKey = "LLMDocumentExtraction";
 
+        public const string CandidateInformationKey = "CandidateInformation";
+
         /*
         public const string MetadataKey = "Metadata";
         public const string EnvelopeUuidKey = "EnvelopeUuid";

@@ -35,7 +35,7 @@ namespace Joyn.LLMDriver.Controllers
                     _logger.LogInformation($"Executed File.ProduceMetadata for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
@@ -60,7 +60,7 @@ namespace Joyn.LLMDriver.Controllers
                     _logger.LogInformation($"Executed ProduceImages for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
@@ -84,7 +84,7 @@ namespace Joyn.LLMDriver.Controllers
                     _logger.LogInformation($"Executed ProduceOCRAssets for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
@@ -108,7 +108,7 @@ namespace Joyn.LLMDriver.Controllers
                     _logger.LogInformation($"Executed ConsolidateAssets for: {model.TransactionIdentifier}");
                 }
 
-                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model), true, String.Empty);
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
             });
 
             return Ok();
