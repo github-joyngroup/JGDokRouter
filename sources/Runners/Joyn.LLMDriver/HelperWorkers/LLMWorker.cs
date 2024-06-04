@@ -23,6 +23,11 @@ namespace Joyn.LLMDriver.HelperWorkers
         //Static variables
         private const string ClassifyPromptKey = "classify";
         private const string ClassificationResultKey = "classification";
+        
+        private const string CheckIfResumePromptKey = "checkifresume";
+        private const string IsResumeResultKey = "isResume";
+        private const string ResumeClassificationValue = "Resume";
+
         private const string DocumentContentPlaceholder = "DOCUMENT_CONTENT";
         private static string LLMPromptsLocation;
 
@@ -211,7 +216,89 @@ namespace Joyn.LLMDriver.HelperWorkers
         #region Check if document is a Resume (CV)
 
         //TODO: THIS IS HARDCODED TO USE OLLAMA, SHALL WE CHANGE IT TO BE CONFIGURED. IF SO, WHERE AND HOW?
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._70_CheckIfResume)]
+        public static void CheckIfResume(ActivityModel model, Guid executionId)
+        {
+            //Obtain the LLMProcessData object
+            var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
+            if (llmProcessData == null || llmProcessData.ProcessData == null || !llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.FileInformationKey))
+            {
+                //No File was uploaded - Do nothing as we cannot proceed without a file
+                DDLogger.LogWarn<LLMWorker>($"No File was uploaded for {model.TransactionIdentifier}");
+                return;
+            }
 
+            //Initial validation
+            if (llmProcessData == null || llmProcessData.ProcessData == null || !llmProcessData.ProcessData.ContainsKey(LLMProcessDataConstants.AssetInformationKey))
+            {
+                //We don't have nay asset information, cannot classify
+                DDLogger.LogWarn<LLMWorker>($"{model.TransactionIdentifier} cannot map to any process data with database identifier: {model.DatabaseIdentifier}");
+                return;
+            }
+
+            var consolidatedTextLines = AssetWorker.GetAssetText(model.BaseAssetsFilePath, LLMProcessDataConstants.AssetKeyConsolidatedTextLines, llmProcessData);
+            if (String.IsNullOrWhiteSpace(consolidatedTextLines))
+            {
+                //We don't have any content to extract, cannot continue
+                DDLogger.LogWarn<LLMWorker>($"No content for extraction in transaction {model.TransactionIdentifier}");
+                return;
+            }
+
+            //Prepare prompt
+            var prompt = LLMPrompts[CheckIfResumePromptKey];
+            prompt = prompt.Replace($"{DocumentContentPlaceholder}", consolidatedTextLines);
+
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
+            var responseTask = GetOllamaResponseAsync(prompt, $"{model.TransactionIdentifier}");
+            responseTask.Wait();
+            var response = responseTask.Result ?? String.Empty;
+
+            sw.Stop();
+            DDLogger.LogDebug<LLMWorker>($"LLM Check if Resume Time - Transaction {model.TransactionIdentifier} took {sw.ElapsedMilliseconds}ms");
+
+            //Persist chat gpt asset
+            AssetWorker.PutAssetText(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyOllamaResumeCheck}.json", response, llmProcessData, LLMProcessDataConstants.AssetKeyOllamaResumeCheck, bUpdateDb: false);
+
+            try
+            {
+                var isResume = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(response);
+                if (isResume == null)
+                {
+                    AssetWorker.PutAssetText(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyIsResumeError}.txt", "LLM FAIL - null asset deserialization", llmProcessData, LLMProcessDataConstants.AssetKeyIsResumeError, bUpdateDb: false);
+                }
+                else if (!isResume.Any())
+                {
+                    AssetWorker.PutAssetText(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyIsResumeError}.txt", "LLM FAIL - empty dictionary deserialization", llmProcessData, LLMProcessDataConstants.AssetKeyIsResumeError, bUpdateDb: false);
+                }
+                else if (!isResume.ContainsKey(IsResumeResultKey))
+                {
+                    AssetWorker.PutAssetText(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyIsResumeError}.txt", $"LLM FAIL - '{ClassificationResultKey}' key not found", llmProcessData, LLMProcessDataConstants.AssetKeyIsResumeError, bUpdateDb: false);
+                }
+                else
+                {
+                    var isResumeResult = bool.Parse(isResume[IsResumeResultKey]);
+                    //llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
+                    if (isResumeResult)
+                    {
+                        //Add Resume classification to the process data so it can be used for further processing
+                        LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
+                        {
+                            Classification = ResumeClassificationValue
+                        };
+                    }
+                    DDLogger.LogInfo<LLMWorker>($"LLM IsResume Success - IsResume: {isResumeResult}");
+                }
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText($"{model.BaseAssetsFilePath}.error.txt", "LLM FAIL - " + ex.Message);
+                AssetWorker.PutAssetText(model.BaseAssetsFilePath, $"{LLMProcessDataConstants.AssetKeyIsResumeError}.txt", $"LLM FAIL WITH EXCEPTION\r\n{ex.Message}\r\n------------\r\n{ex.StackTrace}", llmProcessData, LLMProcessDataConstants.AssetKeyIsResumeError, bUpdateDb: false);
+            }
+
+            LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
+        }
 
         #endregion
 
@@ -233,9 +320,9 @@ namespace Joyn.LLMDriver.HelperWorkers
 
         #endregion
 
-        #region Generic OLLama Access Method
+        #region Generic Ollama Access Method
 
-        private static async Task<string> GetOLLamaResponseAsync(string prompt, string identifier)
+        private static async Task<string> GetOllamaResponseAsync(string prompt, string identifier)
         {
             try
             {

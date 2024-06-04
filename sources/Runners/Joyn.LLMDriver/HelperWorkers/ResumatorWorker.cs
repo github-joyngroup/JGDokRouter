@@ -23,8 +23,7 @@ namespace Joyn.LLMDriver.HelperWorkers
 {
     public class ResumatorWorker
     {
-        private const int ResumatorMaxCallsPerMinute = 2; //it's 80, but we want to be safe
-        private const string ResumeClassificationValue = "Resume";
+        private const int ResumatorMaxCallsPerMinute = 4; //it's 80, but we want to be safe
         private const int ResumatorMaxPageSize = 100;
 
         //Static variables
@@ -276,6 +275,12 @@ namespace Joyn.LLMDriver.HelperWorkers
                     }
                 }
 
+
+#if DEBUG
+                //If debug only process debugN applications at a a time
+                int debugN = 1;
+                applications = applications.Take(debugN).ToList();
+#endif
                 return applications;
             }
             catch (JsonException ex)
@@ -486,34 +491,6 @@ namespace Joyn.LLMDriver.HelperWorkers
 
             CandidateForMongoDAL.SaveOrUpdateCandidate(candidate);
             return filesTask.Result.Count;
-
-            ////Obtain the LLMProcessData object
-            //var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
-
-            ////TODO: HOW TO HANDLE MULTIPLE DOCUMENTS OR HOW TO PICK RESUME FOR PROCESSING??
-            //if (application.Documents.Any())
-            //{
-            //    var documentToProcess = application.Documents.First();
-
-            //    //Add file to the process data so it can be further used in the pipeline
-            //    llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = new UploadedFileInformation()
-            //    {
-            //        EnvelopeUuid = Guid.Parse(documentToProcess.Id),
-            //        OriginalFileName = documentToProcess.FileName,
-            //        OriginalContentType = documentToProcess.ContentType,
-            //        LocalFilePath = documentToProcess.FilePath
-            //    }.ToBsonDocument();
-
-            //    //Add Resume classification to the process data so it can be used for further processing
-            //    LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
-            //    {
-            //        Classification = ResumeClassificationValue
-            //    };
-            //    llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
-
-            //    //Save the updated LLMProcessData object
-            //    LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
-            //}
         }
 
         #endregion
@@ -523,8 +500,8 @@ namespace Joyn.LLMDriver.HelperWorkers
         ///<summary>
         /// Will place the document to be processed by the LLM Document Processing pipeline on the corresponding model location
         ///</summary>
-        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_PrepareResumeProcessing)]
-        public static void PrepareResumeProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData, int documentToProcessIndex)
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_PrepareDocumentProcessing)]
+        public static void PrepareDocumentProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData, int documentToProcessIndex)
         {
             //Obtain the LLMProcessData object and extract the applicationId and candidate email
             var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
@@ -572,13 +549,6 @@ namespace Joyn.LLMDriver.HelperWorkers
                 LocalFilePath = documentToProcess.FilePath
             }.ToBsonDocument();
 
-            //Add Resume classification to the process data so it can be used for further processing
-            LLMDocumentExtraction llmDocumentExtraction = new LLMDocumentExtraction
-            {
-                Classification = ResumeClassificationValue
-            };
-            llmProcessData.ProcessData[LLMProcessDataConstants.LLMDocumentExtractionKey] = llmDocumentExtraction.ToBsonDocument();
-
             //Save the updated LLMProcessData object
             LLMProcessDataDAL.SaveOrUpdate(llmProcessData);
         }
@@ -586,8 +556,8 @@ namespace Joyn.LLMDriver.HelperWorkers
         ///<summary>
         /// Will clear the document to be processed by the LLM Document Processing pipeline to keep the process data clean after processing
         ///</summary>
-        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_ClearResumeProcessing)]
-        public static void ClearResumeProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData)
+        [JGTimelogClientAspect(ModelParameterIndex = 0, ExecutionIdParameterIndex = 1, ExpectedModelType = JGLogClientKnownModelTypes.ActivityModel, Domain = JGTimelogDomainTable._60_ClearDocumentProcessing)]
+        public static void ClearDocumentProcessing(ActivityModel model, Guid executionId, LLMCompanyData companyData)
         {
             //Obtain the LLMProcessData object and extract the applicationId and candidate email
             var llmProcessData = LLMProcessDataDAL.Get(model.DatabaseIdentifier);
@@ -598,7 +568,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             }
 
             //Clear file information key 
-            llmProcessData.ProcessData[LLMProcessDataConstants.FileInformationKey] = null;
+            llmProcessData.ProcessData.Remove(LLMProcessDataConstants.FileInformationKey);
 
             //Save the updated LLMProcessData object
             LLMProcessDataDAL.SaveOrUpdate(llmProcessData);

@@ -17,14 +17,15 @@
         public const uint _60_UpdateApplications= 0x3C020000; //60.2.0.0
         public const uint _60_UpdateCandidate = 0x3C030000; //60.3.0.0
         public const uint _60_UpdateDocuments = 0x3C040000; //60.4.0.0
-        public const uint _60_PrepareResumeProcessing = 0x3C050000; //60.5.0.0
-        public const uint _60_ClearResumeProcessing = 0x3C060000; //60.6.0.0
+        public const uint _60_PrepareDocumentProcessing = 0x3C050000; //60.5.0.0
+        public const uint _60_ClearDocumentProcessing = 0x3C060000; //60.6.0.0
 
         //70 for LLMWorker
         public const uint _70_LLMWorker = 0x46000000; //70.0.0.0
         public const uint _70_ClassifyUsingLLM = 0x46010000; //70.1.0.0
         public const uint _70_PerformLLMExtraction = 0x46020000; //70.2.0.0
-        
+        public const uint _70_CheckIfResume = 0x46030000; //70.3.0.0
+
         //80 for DocDigitizerWorker
         public const uint _80_DocDigitizerWorker = 0x50000000; //80.0.0.0
         public const uint _80_ProduceWorldObject = 0x50010000; //80.1.0.0

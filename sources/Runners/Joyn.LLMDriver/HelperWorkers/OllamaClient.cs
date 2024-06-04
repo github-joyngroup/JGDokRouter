@@ -46,7 +46,7 @@ namespace Joyn.LLMDriver.HelperWorkers
             DDLogger.LogDebug<OllamaClient>($"Found {modelsTask.Result.Count()} Local models");
             foreach (var model in modelsTask.Result)
             {
-                if(model.Name == Settings.Model)
+                if(model.Name.Contains(Settings.Model.ToLower().Trim()))
                 {
                     DDLogger.LogInfo<OllamaClient>($" - {model.Name} - SELECTED MODEL");
                     bFoundModel = true;
@@ -66,10 +66,18 @@ namespace Joyn.LLMDriver.HelperWorkers
                 {
                     DDLogger.LogInfo<OllamaClient>($"{Settings.Model} - Not loaded - will issue pull command");
 
+                    double latestPercent = 0;
+                    string latestStatus = "";
                     var pullModelTask = Client.PullModel(Settings.Model, status =>
                     {
-                        if (status.Percent % 20 == 0)
+                        if(latestStatus != status.Status)
                         {
+                            latestPercent = 0;
+                        }
+                        if (status.Percent > latestPercent && status.Percent % 10 == 0)
+                        {
+                            latestStatus = status.Status;
+                            latestPercent = status.Percent;
                             DDLogger.LogDebug<OllamaClient>($"Pulling model {Settings.Model} - {status.Percent}% - {status.Status}");
                         }
                     });

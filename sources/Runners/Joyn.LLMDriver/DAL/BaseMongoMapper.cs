@@ -16,6 +16,7 @@ namespace Joyn.LLMDriver.DAL
 
             //So guids are readable in Mongo the same way they are in C#
             BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            BsonDefaults.GuidRepresentation = GuidRepresentation.Standard;
             BsonSerializer.RegisterSerializer(typeof(DateTime), new IsoDateTimeSerializer());
 
             //Epocas, 27/03/2020 > this allows POCO classes to have less fields than those existing in the Mongo database

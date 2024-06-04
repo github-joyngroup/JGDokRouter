@@ -29,6 +29,9 @@ namespace Joyn.LLMDriver.DAL
         public const string AssetKeyChatGPTExtract = "ChatGPTExtract";
         public const string AssetKeyClassificationError = "ClassificationError";
 
+        public const string AssetKeyOllamaResumeCheck = "OllamaResumeCheck"; 
+        public const string AssetKeyIsResumeError = "IsResumeError"; 
+
         public const string LLMDocumentExtractionKey = "LLMDocumentExtraction";
 
         public const string CandidateInformationKey = "CandidateInformation";

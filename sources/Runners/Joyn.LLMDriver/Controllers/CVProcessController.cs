@@ -132,5 +132,92 @@ namespace Joyn.LLMDriver.Controllers
 
             return Ok();
         }
+
+        /// <summary>
+        /// Entry point for the Update Documents
+        /// </summary>
+        [HttpPost("PrepareDocumentProcessing")]
+        public IActionResult PrepareDocumentProcessing(StartActivityOut startActivityPayload)
+        {
+            //Do something async
+            Task.Run(() =>
+            {
+                var model = startActivityPayload.MarshalledExternalData != null ? ProtoBufSerializer.Deserialize<ActivityModel>(startActivityPayload.MarshalledExternalData) : null;
+
+                if (!startActivityPayload.TestMode)
+                {
+                    _logger.LogInformation($"Executing CVProcess.PrepareDocumentProcessing for: {model.TransactionIdentifier}");
+
+                    //Obtain the company data
+                    LLMCompanyData companyData = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
+
+                    ResumatorWorker.PrepareDocumentProcessing(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, companyData, startActivityPayload.ActivityExecutionKey.CycleCounter.Value);
+
+                    _logger.LogInformation($"Executed CVProcess.PrepareDocumentProcessing for: {model.TransactionIdentifier}");
+                }
+
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
+            });
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// Entry point for the Update Documents
+        /// </summary>
+        [HttpPost("CheckIfResume")]
+        public IActionResult CheckIfResume(StartActivityOut startActivityPayload)
+        {
+            //Do something async
+            Task.Run(() =>
+            {
+                var model = startActivityPayload.MarshalledExternalData != null ? ProtoBufSerializer.Deserialize<ActivityModel>(startActivityPayload.MarshalledExternalData) : null;
+
+                if (!startActivityPayload.TestMode)
+                {
+                    _logger.LogInformation($"Executing CVProcess.CheckIfResume for: {model.TransactionIdentifier}");
+
+                    //Obtain the company data
+                    LLMCompanyData companyData = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
+
+                    LLMWorker.CheckIfResume(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier);
+
+                    _logger.LogInformation($"Executed CVProcess.CheckIfResume for: {model.TransactionIdentifier}");
+                }
+
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
+            });
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// Entry point for the Update Documents
+        /// </summary>
+        [HttpPost("ClearDocumentProcessing")]
+        public IActionResult ClearDocumentProcessing(StartActivityOut startActivityPayload)
+        {
+            //Do something async
+            Task.Run(() =>
+            {
+                var model = startActivityPayload.MarshalledExternalData != null ? ProtoBufSerializer.Deserialize<ActivityModel>(startActivityPayload.MarshalledExternalData) : null;
+
+                if (!startActivityPayload.TestMode)
+                {
+                    _logger.LogInformation($"Executing CVProcess.ClearDocumentProcessing for: {model.TransactionIdentifier}");
+
+                    //Obtain the company data
+                    LLMCompanyData companyData = LLMCompanyDataDAL.Get(model.CompanyIdentifier);
+
+                    ResumatorWorker.ClearDocumentProcessing(model, startActivityPayload.ActivityExecutionKey.ActivityExecutionIdentifier, companyData);
+
+                    _logger.LogInformation($"Executed CVProcess.ClearDocumentProcessing for: {model.TransactionIdentifier}");
+                }
+
+                Common.CallbackEndActivity(startActivityPayload, ProtoBufSerializer.Serialize(model));
+            });
+
+            return Ok();
+        }
     }
 }
